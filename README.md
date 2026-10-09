@@ -117,10 +117,42 @@ tests/             automated tests (pytest)
 
 ---
 
+## Translation accuracy (measured)
+
+Real scores from NLLB-200 (`distilled-600M`) on the **FLORES-200** benchmark,
+scored with `sacrebleu`, n = 50 sentences per direction:
+
+| Direction | chrF | BLEU |
+|-----------|-----:|-----:|
+| Amharic → English | 50.9 | 22.1 |
+| Afaan Oromo → English | 45.2 | 18.4 |
+| English → Lithuanian | 52.6 | 21.3 |
+
+Lithuanian and Amharic are strong enough to publish directly; Oromo (low-resource)
+is lower and is routed through **human review** before any listing goes live.
+Reproduce with `eval/` — see [`eval/README.md`](eval/README.md).
+
+## Public website / deployment
+
+The English site is generated from published listings and deployed to **GitHub
+Pages** automatically on every push to `main` via
+[`.github/workflows/pages.yml`](.github/workflows/pages.yml). Build locally with:
+
+```bash
+python -m app.site.build _site     # -> _site/index.html
+```
+
+> One-time setup: in the repo, go to **Settings → Pages → Build and deployment →
+> Source: GitHub Actions**.
+
 ## Status
 
-🚧 **Phase 1 scaffold** — end-to-end flow against the Mock adapter, with mockable NLLB
-translation. Phase 2 will fold in fetched Amharic/Oromo parallel data and fine-tuning.
+✅ **Phase 1** — gateway-agnostic SMS pipeline (language ID, extraction, translation).
+✅ **Phase 2** — web simulator + FLORES-200 evaluation harness + tests.
+✅ **Phase 3** — real NLLB-200 wired in (measured accuracy above) + GitHub Pages deploy.
+
+Next: fold in fetched Amharic/Oromo parallel data (OPUS/Masakhane) and build the
+deferred image-upload page.
 
 ## License / data attribution
 
