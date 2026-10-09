@@ -12,3 +12,6 @@ data/web_demo_listings.json
 .flores_data/
 # generated Pages build output (produced by CI / `python -m app.site.build`)
 _site/
+_site_test/
+# owner-uploaded images at runtime (not source)
+uploads/

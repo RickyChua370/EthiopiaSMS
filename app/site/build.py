@@ -12,6 +12,7 @@ Oromo translations awaiting review never appear.
 
 from __future__ import annotations
 
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -53,6 +54,14 @@ def build(output_dir: Path) -> Path:
     index.write_text(render_html(store.published()), encoding="utf-8")
     # Prevent Jekyll from processing the output on GitHub Pages.
     (output_dir / ".nojekyll").write_text("", encoding="utf-8")
+
+    # Copy owner-uploaded images (if any) so the static site can display them.
+    # Listings reference images by the relative path `uploads/<token>/<file>`,
+    # so the `uploads/` tree must sit next to index.html in the output.
+    uploads_src = Path("uploads")
+    if uploads_src.exists():
+        shutil.copytree(uploads_src, output_dir / "uploads", dirs_exist_ok=True)
+
     return index
 
 

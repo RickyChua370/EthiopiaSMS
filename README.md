@@ -30,6 +30,17 @@ Images are **not** required to publish: a listing goes live from SMS text immedi
 is marked `images_pending`. The owner receives an upload link they can open **whenever they
 next have internet** to attach photos, which then appear on the already-live listing.
 
+The upload link is served by a small, connection-aware upload page:
+
+```bash
+python -m app.uploads     # http://localhost:8001/upload/<token>
+```
+
+The owner opens their unique `/upload/<token>` link, uploads JPEG/PNG photos, and the
+images attach to the live listing and render on the public site (the build step copies
+`uploads/` next to the generated `index.html`). Only internet is needed for this
+optional step — the listing itself was already published from SMS.
+
 ---
 
 ## Architecture (gateway-agnostic)
@@ -109,6 +120,7 @@ app/
   site/            static website generator
   simulate.py      CLI SMS simulator
   web.py           web-based SMS simulator (on-screen phone + live site)
+  uploads.py       deferred image-upload server (connection-aware photos)
 data/              category taxonomy, prompt strings
 eval/              FLORES-200 translation evaluation harness (chrF/BLEU)
 docs/              testing & deployment guides
