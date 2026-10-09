@@ -5,16 +5,14 @@ Pages / Actions deploys. Run manually with:
 
     python -m app.site.build            # -> _site/index.html
 
-The site combines two sources of listings:
-  1. A few illustrative demo onboarding flows (one per language), to show the
-     SMS → listing pipeline.
-  2. REAL Addis Ababa businesses sourced from OpenStreetMap (© OpenStreetMap
-     contributors, ODbL) — actual names, phones and coordinates. These carry a
-     generic, openly-licensed CATEGORY image (not a photo of the specific place);
-     in production the photo slot stays a placeholder until the owner uploads one.
+The site is populated with REAL businesses sourced from OpenStreetMap
+(© OpenStreetMap contributors, ODbL) — actual names, phones and coordinates across
+several Ethiopian cities and categories. Two businesses that have a genuinely free,
+openly-licensed photo on Wikimedia Commons display it; every other listing has NO
+photo and shows an honest "owner hasn't added photos yet" note (the owner would add
+their own via the SMS upload flow).
 
-Only published (reviewed-and-approved) listings are rendered, so low-confidence
-Oromo translations awaiting review never appear.
+Only published (reviewed-and-approved) listings are rendered.
 """
 
 from __future__ import annotations
@@ -26,46 +24,26 @@ from pathlib import Path
 
 from data.categories import get_category
 from data.real_osm_listings import REAL_BUSINESSES
-from app.adapters.base import OutboundMessage
-from app.adapters.mock import MockAdapter
-from app.conversation.flow import ConversationEngine
 from app.site.generator import render_html
 from app.store.listings import Listing, ListingStore
 
-CATEGORY_IMAGE_DIR = Path("site_assets/category_images")
-
-# Demo onboarding conversations (owner-side messages), one per business.
-DEMO_FLOWS = [
-    ("+251911000001", ["hello", "2", "Tomoca Coffee", "150 birr", "9.0105, 38.7612",
-                       "Historic coffee house in the heart of Addis Ababa, roasting since 1953."]),
-    ("+251911000002", ["hello", "3", "Blue Nile Guesthouse", "800 birr", "9.0300, 38.7600",
-                       "Family-run guesthouse with a quiet garden, near the national museum."]),
-    ("+251911000004", ["hello", "1", "Yod Abyssinia", "250 birr", "9.0120, 38.7650",
-                       "Traditional Ethiopian cuisine with live cultural music and dance."]),
-    ("+251911000006", ["hello", "4", "Shiro Meda Handicrafts", "skip", "9.0450, 38.7550",
-                       "Handwoven textiles and traditional crafts from local artisans."]),
-]
+BUSINESS_PHOTO_DIR = Path("site_assets/business_photos")
 
 
-def _add_demo_flows(store: ListingStore) -> None:
-    engine = ConversationEngine(store)
-    adapter = MockAdapter()
-    adapter.register_handler(
-        lambda m: [OutboundMessage(m.sender, r) for r in engine.handle(m.sender, m.text)]
-    )
-    for phone, msgs in DEMO_FLOWS:
-        for msg in msgs:
-            adapter.receive(phone, msg)
+def _location_label(desc: str) -> str:
+    """Derive a human city/location label from the trailing 'in <City>.' of the
+    factual description, falling back to 'Ethiopia'."""
+    import re
+    m = re.search(r"\bin ([A-Z][A-Za-z' ]+?)\.?$", desc.strip())
+    return m.group(1).strip() if m else "Ethiopia"
 
 
 def _add_real_osm_businesses(store: ListingStore) -> None:
-    """Add real OSM-sourced businesses straight to the store (they come from OSM
-    data, not an SMS conversation), each with a generic category image."""
-    for name, cat_id, phone, lat, lon, desc, img_key in REAL_BUSINESSES:
+    for name, cat_id, phone, lat, lon, desc, photo in REAL_BUSINESSES:
         cat = get_category(cat_id)
         image_paths = []
-        if img_key and (CATEGORY_IMAGE_DIR / f"{img_key}.jpg").exists():
-            image_paths = [f"category_images/{img_key}.jpg"]
+        if photo and (Path("site_assets") / Path(photo)).exists():
+            image_paths = [photo]
         store.add(Listing(
             phone=phone,
             category_en=cat.en if cat else "Other",
@@ -76,6 +54,7 @@ def _add_real_osm_businesses(store: ListingStore) -> None:
             source_lang="eng",
             lat=lat,
             lon=lon,
+            area=_location_label(desc),
             image_paths=image_paths,
             images_pending=not image_paths,
             published=True,
@@ -88,16 +67,16 @@ def build(output_dir: Path) -> Path:
     tmp = Path(tempfile.mkdtemp()) / "listings.json"
     store = ListingStore(tmp)
     _add_real_osm_businesses(store)
-    _add_demo_flows(store)
 
     output_dir.mkdir(parents=True, exist_ok=True)
     index = output_dir / "index.html"
     index.write_text(render_html(store.published()), encoding="utf-8")
     (output_dir / ".nojekyll").write_text("", encoding="utf-8")
 
-    # Generic category images (openly licensed) used by the real OSM listings.
-    if CATEGORY_IMAGE_DIR.exists():
-        shutil.copytree(CATEGORY_IMAGE_DIR, output_dir / "category_images", dirs_exist_ok=True)
+    # Real business photos (the two openly-licensed ones), served as
+    # `business_photos/<file>` next to index.html.
+    if BUSINESS_PHOTO_DIR.exists():
+        shutil.copytree(BUSINESS_PHOTO_DIR, output_dir / "business_photos", dirs_exist_ok=True)
 
     # Owner-uploaded images (if any) referenced as `uploads/<token>/<file>`.
     uploads_src = Path("uploads")

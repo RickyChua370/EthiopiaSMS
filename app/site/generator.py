@@ -1,25 +1,35 @@
 """Static website generator — renders published listings to an English site.
 
-Outputs plain HTML (no framework, no build step) so it can be committed to the repo
-and served via GitHub Pages. Tourists can browse listings and tap "Call to book",
-which uses a `tel:` link to the owner's phone. Listings without photos yet show a
-tasteful placeholder until images arrive.
+Outputs plain HTML + a little vanilla JavaScript (no framework, no build step) so it
+can be committed to the repo and served via GitHub Pages. Tourists can:
+  * search by name/description,
+  * filter by category and by location/city,
+  * tap "Call to book" (a `tel:` link to the owner's phone).
+
+Listings without a photo show an honest note that the owner has not added photos
+yet — we never fill the gap with stock imagery of a place we don't represent.
 """
 
 from __future__ import annotations
 
 import html
+import json
 from pathlib import Path
 
 from app.store.listings import Listing, ListingStore
 
-DEFAULT_OUTPUT = Path("docs/site")  # docs/ so GitHub Pages can serve it directly
+DEFAULT_OUTPUT = Path("docs/site")
 
 
 def _maps_link(listing: Listing) -> str | None:
     if listing.lat is not None and listing.lon is not None:
-        return f"https://www.openstreetmap.org/?mlat={listing.lat}&mlon={listing.lon}#map=17/{listing.lat}/{listing.lon}"
+        return (f"https://www.openstreetmap.org/?mlat={listing.lat}&mlon={listing.lon}"
+                f"#map=17/{listing.lat}/{listing.lon}")
     return None
+
+
+def _location_of(listing: Listing) -> str:
+    return (listing.area or "Ethiopia").strip()
 
 
 def _card(listing: Listing) -> str:
@@ -28,24 +38,26 @@ def _card(listing: Listing) -> str:
     desc = html.escape(listing.description_en or "")
     price = html.escape(listing.price_etb) if listing.price_etb else None
     loc = _maps_link(listing)
-    area = html.escape(listing.area) if listing.area else None
+    location = _location_of(listing)
+    area = html.escape(location)
 
     if listing.image_paths:
-        img = f'<img src="{html.escape(listing.image_paths[0])}" alt="{name}">'
+        img = f'<img src="{html.escape(listing.image_paths[0])}" alt="{name}" loading="lazy">'
     else:
-        img = '<div class="placeholder">📷 Photos coming soon</div>'
+        img = ('<div class="placeholder">'
+               '<span>📷</span><small>The owner hasn\'t added photos yet</small></div>')
 
-    meta = [f'<span class="cat">{cat}</span>']
+    meta = [f'<span class="cat">{cat}</span>', f'<span class="area">📍 {area}</span>']
     if price:
         meta.append(f'<span class="price">{price}</span>')
-    if area:
-        meta.append(f'<span class="area">{area}</span>')
 
     links = [f'<a class="book" href="tel:{html.escape(listing.phone)}">📞 Call to book</a>']
     if loc:
-        links.append(f'<a class="map" href="{loc}" target="_blank" rel="noopener">📍 View location</a>')
+        links.append(f'<a class="map" href="{loc}" target="_blank" rel="noopener">🗺️ Map</a>')
 
-    return f"""      <article class="card">
+    # data-* attributes power the client-side search/filter.
+    search_blob = html.escape(f"{listing.name_en} {listing.description_en} {cat} {location}".lower())
+    return f"""      <article class="card" data-category="{cat}" data-location="{area}" data-search="{search_blob}">
         {img}
         <h2>{name}</h2>
         <div class="meta">{''.join(meta)}</div>
@@ -56,6 +68,14 @@ def _card(listing: Listing) -> str:
 
 def render_html(listings: list[Listing]) -> str:
     cards = "\n".join(_card(l) for l in listings) or '<p class="empty">No listings yet.</p>'
+    categories = sorted({l.category_en for l in listings})
+    locations = sorted({_location_of(l) for l in listings})
+    cat_options = "".join(f'<option value="{html.escape(c)}">{html.escape(c)}</option>'
+                          for c in categories)
+    loc_options = "".join(f'<option value="{html.escape(l)}">{html.escape(l)}</option>'
+                          for l in locations)
+    total = len(listings)
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -69,24 +89,33 @@ def render_html(listings: list[Listing]) -> str:
     header {{ background:var(--accent); color:#fff; padding:2rem 1rem; text-align:center; }}
     header h1 {{ margin:0 0 .25rem; }}
     header p {{ margin:0; opacity:.9; }}
-    main {{ max-width:1000px; margin:0 auto; padding:1.5rem 1rem;
+    .controls {{ position:sticky; top:0; z-index:5; background:#fff; border-bottom:1px solid #e7e2d8;
+                 padding:.9rem 1rem; display:flex; flex-wrap:wrap; gap:.6rem; justify-content:center;
+                 box-shadow:0 1px 4px rgba(0,0,0,.05); }}
+    .controls input, .controls select {{ padding:.55rem .7rem; border:1px solid #cbd5cf;
+                 border-radius:8px; font-size:.9rem; background:#fff; }}
+    .controls input {{ flex:1; min-width:200px; max-width:360px; }}
+    .controls button {{ border:1px solid #cbd5cf; background:#f3f6f3; border-radius:8px;
+                 padding:.55rem .8rem; cursor:pointer; font-size:.9rem; }}
+    .count {{ text-align:center; color:#666; font-size:.85rem; padding:.6rem; }}
+    main {{ max-width:1050px; margin:0 auto; padding:0 1rem 1.5rem;
             display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:1.25rem; }}
     .card {{ background:#fff; border:1px solid #e7e2d8; border-radius:12px; overflow:hidden;
              box-shadow:0 1px 3px rgba(0,0,0,.06); display:flex; flex-direction:column; }}
     .card img, .placeholder {{ width:100%; height:150px; object-fit:cover; }}
-    .placeholder {{ display:flex; align-items:center; justify-content:center;
-                    background:#f0ece2; color:#998; font-size:.9rem; }}
+    .placeholder {{ display:flex; flex-direction:column; gap:.3rem; align-items:center;
+                    justify-content:center; background:#f0ece2; color:#a99; text-align:center; padding:0 1rem; }}
+    .placeholder span {{ font-size:1.6rem; }} .placeholder small {{ font-size:.78rem; }}
     .card h2 {{ font-size:1.1rem; margin:.75rem .9rem .25rem; }}
     .meta {{ margin:0 .9rem; display:flex; flex-wrap:wrap; gap:.4rem; }}
     .meta span {{ font-size:.75rem; padding:.15rem .5rem; border-radius:999px; background:#eef5ef; color:var(--accent); }}
     .card p {{ margin:.6rem .9rem; font-size:.9rem; color:#444; flex:1; }}
     .links {{ display:flex; gap:.5rem; padding:.9rem; border-top:1px solid #f0ece2; }}
-    .links a {{ flex:1; text-align:center; text-decoration:none; font-size:.85rem;
-                padding:.5rem; border-radius:8px; }}
+    .links a {{ flex:1; text-align:center; text-decoration:none; font-size:.85rem; padding:.5rem; border-radius:8px; }}
     .book {{ background:var(--accent); color:#fff; }}
     .map {{ background:#eef5ef; color:var(--accent); }}
     footer {{ text-align:center; padding:1.5rem 1rem; font-size:.8rem; color:#888; }}
-    .empty {{ grid-column:1/-1; text-align:center; color:#888; }}
+    .empty {{ grid-column:1/-1; text-align:center; color:#888; padding:2rem; }}
   </style>
 </head>
 <body>
@@ -94,15 +123,59 @@ def render_html(listings: list[Listing]) -> str:
     <h1>Discover Local Ethiopia</h1>
     <p>Authentic businesses, direct from the owners.</p>
   </header>
-  <main>
+
+  <div class="controls">
+    <input id="q" type="search" placeholder="Search businesses, food, places…"
+           aria-label="Search" oninput="applyFilters()">
+    <select id="cat" aria-label="Filter by category" onchange="applyFilters()">
+      <option value="">All categories</option>
+      {cat_options}
+    </select>
+    <select id="loc" aria-label="Filter by location" onchange="applyFilters()">
+      <option value="">All locations</option>
+      {loc_options}
+    </select>
+    <button type="button" onclick="resetFilters()">Clear</button>
+  </div>
+  <div class="count" id="count">{total} businesses</div>
+
+  <main id="grid">
 {cards}
+    <p class="empty" id="noresults" style="display:none">No businesses match your search. Try clearing the filters.</p>
   </main>
+
   <footer>
     Business names, phone numbers &amp; locations © OpenStreetMap contributors (ODbL).
-    Category images are generic, openly-licensed illustrations (CC0 / CC BY / CC BY-SA
-    via Wikimedia Commons) &mdash; not photos of the specific business; owners add their
-    own photos via SMS.
+    Most listings have no photo yet — owners add their own via SMS. The two photographed
+    businesses use openly-licensed images (Wikimedia Commons: Ben Abeba CC BY 2.0; Sheraton Addis, public domain).
   </footer>
+
+  <script>
+    const TOTAL = {total};
+    function applyFilters() {{
+      const q = document.getElementById('q').value.trim().toLowerCase();
+      const cat = document.getElementById('cat').value;
+      const loc = document.getElementById('loc').value;
+      let shown = 0;
+      document.querySelectorAll('.card').forEach(card => {{
+        const matchQ = !q || card.dataset.search.includes(q);
+        const matchCat = !cat || card.dataset.category === cat;
+        const matchLoc = !loc || card.dataset.location === loc;
+        const show = matchQ && matchCat && matchLoc;
+        card.style.display = show ? '' : 'none';
+        if (show) shown++;
+      }});
+      document.getElementById('count').textContent =
+        shown === TOTAL ? TOTAL + ' businesses' : shown + ' of ' + TOTAL + ' businesses';
+      document.getElementById('noresults').style.display = shown ? 'none' : '';
+    }}
+    function resetFilters() {{
+      document.getElementById('q').value = '';
+      document.getElementById('cat').value = '';
+      document.getElementById('loc').value = '';
+      applyFilters();
+    }}
+  </script>
 </body>
 </html>
 """
