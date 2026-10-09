@@ -29,6 +29,7 @@ HOST, PORT = "0.0.0.0", 8000
 # keeps the demo self-contained (no file writes needed for the live demo).
 _store = ListingStore(Path("data/web_demo_listings.json"))
 _engine = ConversationEngine(_store)
+_translator = _engine.translator  # same translator the pipeline uses
 _lock = threading.Lock()
 
 
@@ -51,7 +52,8 @@ PAGE = """<!DOCTYPE html>
   .bar { background:#0a7d3c; color:#fff; padding:.6rem .9rem; font-size:.85rem; }
   .bar small { opacity:.85; }
   .msgs { flex:1; padding:.75rem; overflow-y:auto; display:flex; flex-direction:column; gap:.5rem; }
-  .b { max-width:80%; padding:.5rem .7rem; border-radius:12px; font-size:.85rem; white-space:pre-wrap; line-height:1.3; }
+  .b { max-width:80%; padding:.5rem .7rem; border-radius:12px; font-size:.85rem; white-space:pre-wrap;
+       line-height:1.3; overflow-wrap:break-word; word-break:break-word; }
   .in { align-self:flex-end; background:#dcf8c6; }
   .out { align-self:flex-start; background:#fff; }
   .compose { display:flex; border-top:1px solid #ccc; }
@@ -88,6 +90,7 @@ PAGE = """<!DOCTYPE html>
             <button onclick="fill('en')">🇬🇧 English flow</button>
             <button onclick="fill('am')">🇪🇹 Amharic flow</button>
             <button onclick="fill('om')">Oromo flow</button>
+            <button onclick="lithuanianTest()">🇱🇹 Lithuanian (judge test)</button>
           </div>
         </div>
         <div class="compose">
@@ -142,6 +145,23 @@ function fill(lang){
   queue = scripts[lang].slice();
   document.getElementById('inp').value = queue.shift(); send();
 }
+// Judge aid: translate an English listing sentence to Lithuanian so Lithuanian
+// judges can verify translation quality in their own language.
+async function lithuanianTest(){
+  const sample = "Historic coffee house in the heart of Addis Ababa, roasting since 1953.";
+  add("🇱🇹 Judge test — translate English → Lithuanian", "in");
+  add("English: " + sample, "out");
+  try {
+    const res = await fetch('/translate', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({text: sample, source:'eng', target:'lit'})});
+    const data = await res.json();
+    add("Lietuvių (Lithuanian): " + data.text, "out");
+    add("Engine: " + data.engine + (data.mock ? " — enable real NLLB for live translation" : ""), "out");
+  } catch(e){
+    add("Translation unavailable in this session.", "out");
+  }
+}
 function reset(){
   phone=newPhone(); document.getElementById('who').textContent="("+phone+")";
   document.getElementById('msgs').innerHTML=''; queue=[];
@@ -172,17 +192,28 @@ class Handler(BaseHTTPRequestHandler):
             self._send(404, b"not found", "text/plain")
 
     def do_POST(self) -> None:  # noqa: N802
-        if urlparse(self.path).path != "/sms":
-            self._send(404, b"not found", "text/plain")
-            return
+        path = urlparse(self.path).path
         length = int(self.headers.get("Content-Length", 0))
         payload = json.loads(self.rfile.read(length) or b"{}")
-        phone = str(payload.get("phone", "+251900000000"))
-        text = str(payload.get("text", ""))
-        with _lock:
-            replies = _engine.handle(phone, text)
-        self._send(200, json.dumps({"replies": replies}).encode("utf-8"),
-                   "application/json; charset=utf-8")
+
+        if path == "/sms":
+            phone = str(payload.get("phone", "+251900000000"))
+            text = str(payload.get("text", ""))
+            with _lock:
+                replies = _engine.handle(phone, text)
+            self._send(200, json.dumps({"replies": replies}).encode("utf-8"),
+                       "application/json; charset=utf-8")
+        elif path == "/translate":
+            text = str(payload.get("text", ""))
+            source = str(payload.get("source", "eng"))
+            target = str(payload.get("target", "lit"))
+            result = _translator.translate(text, source, target)
+            is_mock = type(_translator).__name__ == "MockTranslator"
+            self._send(200, json.dumps({
+                "text": result.text, "engine": result.engine, "mock": is_mock,
+            }).encode("utf-8"), "application/json; charset=utf-8")
+        else:
+            self._send(404, b"not found", "text/plain")
 
     def log_message(self, *args) -> None:  # silence default logging
         pass
