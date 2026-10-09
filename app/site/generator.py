@@ -98,7 +98,10 @@ def render_html(listings: list[Listing]) -> str:
 {cards}
   </main>
   <footer>
-    Listings submitted by owners via SMS. Map data © OpenStreetMap contributors (ODbL).
+    Business names, phone numbers &amp; locations © OpenStreetMap contributors (ODbL).
+    Category images are generic, openly-licensed illustrations (CC0 / CC BY / CC BY-SA
+    via Wikimedia Commons) &mdash; not photos of the specific business; owners add their
+    own photos via SMS.
   </footer>
 </body>
 </html>
