@@ -6,8 +6,11 @@
 # torch>=2.0
 # sentencepiece>=0.1.99
 
-# --- Optional: automated tests ---
+# --- Optional: automated tests (Level 2) ---
 # pytest>=7.0
+
+# --- Optional: standard, citable translation metrics (eval harness) ---
+# sacrebleu>=2.3   # if absent, a pure-Python chrF/BLEU is used instead
 
 # --- Optional: real SMS gateways (Phase 4) ---
 # africastalking>=1.2
