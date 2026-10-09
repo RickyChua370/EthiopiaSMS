@@ -1,16 +1,18 @@
-# Phase 1 runs with ZERO third-party dependencies (standard library only),
-# so the mock pipeline, CLI simulator, and site generator work out of the box.
+# Core Phase 1 pipeline (mock translator, CLI/web simulators, site generator)
+# runs with ZERO third-party dependencies — standard library only.
 
-# --- Optional: enable the real NLLB-200 translator (ETHIOPIASMS_REAL_NLLB=1) ---
-# transformers>=4.38
-# torch>=2.0
-# sentencepiece>=0.1.99
+# --- Real NLLB-200 translation (set ETHIOPIASMS_REAL_NLLB=1 to enable) ---
+# Verified with the versions below on CPU.
+transformers>=4.38
+torch>=2.0
+sentencepiece>=0.1.99
 
-# --- Optional: automated tests (Level 2) ---
-# pytest>=7.0
+# --- Translation metrics for the FLORES eval harness ---
+# Optional: if absent, a pure-Python chrF/BLEU is used instead.
+sacrebleu>=2.3
 
-# --- Optional: standard, citable translation metrics (eval harness) ---
-# sacrebleu>=2.3   # if absent, a pure-Python chrF/BLEU is used instead
+# --- Automated tests (Level 2) ---
+pytest>=7.0
 
 # --- Optional: real SMS gateways (Phase 4) ---
 # africastalking>=1.2
