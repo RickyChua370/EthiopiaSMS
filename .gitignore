@@ -7,3 +7,4 @@ venv/
 .pytest_cache/
 # local runtime data (listings are regenerated); keep the site output tracked
 data/listings.json
+data/web_demo_listings.json

@@ -78,8 +78,9 @@ the whole flow works locally with no telecom account.
 | Level | What | Command |
 |-------|------|---------|
 | 1 | **CLI simulator** — chat like an owner in your terminal | `python -m app.simulate` |
-| 1 | **Web simulator** — on-screen phone, click through the flow | `python -m app.web` |
-| 2 | **Automated tests** — scripted conversations + FLORES eval | `pytest` |
+| 1 | **Web simulator** — on-screen phone + live website, best for demos | `python -m app.web` → http://localhost:8000 |
+| 2 | **Automated tests** — scripted conversations + metric checks | `pytest` |
+| 2 | **Translation accuracy** — FLORES-200 chrF/BLEU (incl. en→Lithuanian) | `python -m eval.flores_eval --sample` |
 | 3 | **Webhook test** — POST sample gateway payloads to a local server | see `docs/testing.md` |
 | 4 | **Real SMS** — Africa's Talking / Twilio + ngrok tunnel | see `docs/testing.md` |
 
@@ -107,11 +108,11 @@ app/
   store/           listing storage + deferred image uploads
   site/            static website generator
   simulate.py      CLI SMS simulator
-  web.py           web-based SMS simulator
+  web.py           web-based SMS simulator (on-screen phone + live site)
 data/              category taxonomy, prompt strings
-eval/              FLORES-based translation evaluation harness
+eval/              FLORES-200 translation evaluation harness (chrF/BLEU)
 docs/              testing & deployment guides
-tests/             automated tests
+tests/             automated tests (pytest)
 ```
 
 ---
