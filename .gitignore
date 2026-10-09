@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+*.egg-info/
+.pytest_cache/
+# local runtime data (listings are regenerated); keep the site output tracked
+data/listings.json
