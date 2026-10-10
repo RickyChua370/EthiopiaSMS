@@ -4,7 +4,7 @@ Outputs plain HTML + a little vanilla JavaScript (no framework, no build step) s
 can be committed to the repo and served via GitHub Pages. Tourists can:
   * search by name/description,
   * filter by category and by location/city,
-  * tap "Call to book" (a `tel:` link to the owner's phone).
+  * tap "Message on Telegram" to reach the owner for free via the Telegram↔SMS bridge.
 
 Listings without a photo show an honest note that the owner has not added photos
 yet — we never fill the gap with stock imagery of a place we don't represent.
@@ -19,6 +19,11 @@ from pathlib import Path
 from app.store.listings import Listing, ListingStore
 
 DEFAULT_OUTPUT = Path("docs/site")
+
+# The Telegram bot tourists message to reach a business. Replace with your real
+# bot's username when you deploy one; the website links deep-link into it with the
+# business as the `start` parameter so the bridge knows which owner to connect.
+TELEGRAM_BOT_USERNAME = "EthiopiaSMSBot"
 
 
 def _maps_link(listing: Listing) -> str | None:
@@ -51,7 +56,14 @@ def _card(listing: Listing) -> str:
     if price:
         meta.append(f'<span class="price">{price}</span>')
 
-    links = [f'<a class="book" href="tel:{html.escape(listing.phone)}">📞 Call to book</a>']
+    # Booking goes through the Telegram ↔ SMS bridge: the tourist chats for FREE on
+    # Telegram and the platform relays to the owner over cheap LOCAL SMS — no
+    # expensive international SMS/calls for the tourist. The `start` parameter tells
+    # the bot which business to connect the tourist to.
+    import urllib.parse
+    start = urllib.parse.quote(listing.upload_token or listing.name_en)
+    tg = f"https://t.me/{TELEGRAM_BOT_USERNAME}?start={start}"
+    links = [f'<a class="book" href="{html.escape(tg)}" target="_blank" rel="noopener">💬 Message on Telegram</a>']
     if loc:
         links.append(f'<a class="map" href="{loc}" target="_blank" rel="noopener">🗺️ Map</a>')
 
@@ -145,6 +157,9 @@ def render_html(listings: list[Listing]) -> str:
   </main>
 
   <footer>
+    Tap <strong>Message on Telegram</strong> to reach a business free of charge — your
+    message is relayed to the owner by local SMS and their reply comes back to you, so
+    there are no international SMS or call costs.<br>
     Business names, phone numbers &amp; locations © OpenStreetMap contributors (ODbL).
     Most listings have no photo yet — owners add their own via SMS. The two photographed
     businesses use openly-licensed images (Wikimedia Commons: Ben Abeba CC BY 2.0; Sheraton Addis, public domain).

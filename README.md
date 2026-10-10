@@ -5,8 +5,9 @@ Bringing offline Ethiopian micro, small & medium enterprises (MSMEs) online thro
 
 A business owner texts basic details in **Amharic, Afaan Oromo, or English**. The system
 detects the language, extracts the fields, translates them to English, and publishes a
-clean listing to a **public English website** that international tourists can browse — with
-a direct "call to book" channel back to the owner.
+clean listing to a **public English website** that international tourists can browse.
+Tourists reach owners for free through a **Telegram ↔ SMS bridge** (see below) — their
+message is relayed to the owner as a cheap *local* SMS, avoiding costly international SMS.
 
 > **Why SMS?** In Ethiopia ~78% of adults own a mobile phone but only ~26% use mobile
 > internet daily, and the government already reaches citizens via SMS. SMS meets owners
@@ -22,7 +23,7 @@ Owner texts (am / orm / en)        Small AI pipeline                 Public webs
 "ቡና ቤት፣ ዋጋ 150 ብር፣ ቦሌ"      1. Language ID                     ┌────────────────────────┐
                              2. Field extraction                │ Bole Coffee House      │
                              3. Translate → English             │ Café · ~150 ETB · Bole │
-                             4. Confidence check                │ 📞 Call to book        │
+                             4. Confidence check                │ 💬 Message on Telegram │
                                                                 └────────────────────────┘
 ```
 
@@ -40,6 +41,30 @@ The owner opens their unique `/upload/<token>` link, uploads JPEG/PNG photos, an
 images attach to the live listing and render on the public site (the build step copies
 `uploads/` next to the generated `index.html`). Only internet is needed for this
 optional step — the listing itself was already published from SMS.
+
+---
+
+## Booking: the Telegram ↔ SMS bridge (two-way)
+
+International SMS/calls are expensive and deter tourists. The bridge removes that cost:
+tourists chat for **free over Telegram** (wifi/data), and the platform relays to owners
+over cheap **local** SMS — only the domestic SMS leg is ever paid for, by the platform.
+
+```
+Tourist (Telegram, free) ──inquiry (EN)──▶ Bridge ──translate──▶ local SMS (owner's language)
+Owner (SMS, basic phone) ──reply──────────▶ Bridge ──translate──▶ Telegram message (EN) to tourist
+```
+
+Each tourist↔owner conversation is a short-reference "thread"; the owner only ever sees
+normal SMS and never needs to know Telegram exists. Try the full two-way loop locally
+(mock adapters, no bot token or telecom account needed):
+
+```bash
+python -m app.bridge_demo
+```
+
+The website's **"💬 Message on Telegram"** button on each listing deep-links a tourist
+into the bot for that specific business.
 
 ---
 
