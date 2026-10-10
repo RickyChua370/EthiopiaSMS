@@ -66,6 +66,22 @@ python -m app.bridge_demo
 The website's **"💬 Message on Telegram"** button on each listing deep-links a tourist
 into the bot for that specific business.
 
+### Run a LIVE Telegram bot (real tourists, mock owner)
+
+You can let real people message a real Telegram bot while you play the owner in your
+terminal — no telecom account needed:
+
+```bash
+# 1) create a bot via @BotFather in Telegram, then:
+export TELEGRAM_BOT_TOKEN=<your-token>        # Windows: $env:TELEGRAM_BOT_TOKEN="<token>"
+python -m app.telegram_bridge
+```
+
+Open your bot in Telegram, send `/start`, then a question. The inquiry appears in your
+terminal as an SMS to the owner; type `o: <reply>` to respond — it goes back to the
+tourist's Telegram chat, translated both ways. Add `ETHIOPIASMS_REAL_NLLB=1` for real
+translation. The token is read from the environment and is never committed.
+
 ---
 
 ## Architecture (gateway-agnostic)
