@@ -202,6 +202,21 @@ python -m app.site.build _site     # -> _site/index.html
 > One-time setup: in the repo, go to **Settings → Pages → Build and deployment →
 > Source: GitHub Actions**.
 
+### One-click simulator for judges (Render)
+
+The interactive simulator can be deployed to a **public URL** so judges just click a
+link — no Python, no commands. It uses the free **MyMemory** translation API (real
+translation, no 2.4 GB model) via `render.yaml`. See
+[`docs/DEPLOY.md`](docs/DEPLOY.md) for the ~5-minute **New → Blueprint** steps.
+
+Translator selection (env var):
+
+| Setting | Translator | Use |
+|---------|-----------|-----|
+| `ETHIOPIASMS_REAL_NLLB=1` | local NLLB-200 (best, ~2.4 GB) | local / paid host |
+| `ETHIOPIASMS_TRANSLATOR=mymemory` | free MyMemory web API (light, real) | **hosted demo** |
+| *(default)* | mock placeholders (offline) | quick local tests |
+
 ## Status
 
 ✅ **Phase 1** — gateway-agnostic SMS pipeline (language ID, extraction, translation).

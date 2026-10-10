@@ -26,7 +26,9 @@ from app.conversation.flow import ConversationEngine
 from app.site.generator import render_html
 from app.store.listings import ListingStore
 
-HOST, PORT = "0.0.0.0", 8000
+import os as _os
+HOST = "0.0.0.0"
+PORT = int(_os.environ.get("PORT", "8000"))  # hosts (e.g. Render) inject $PORT
 
 # Each browser "phone number" gets its own conversation; a simple in-memory store
 # keeps the demo self-contained (no file writes needed for the live demo).
