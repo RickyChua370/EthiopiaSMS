@@ -1,0 +1,25 @@
+# Render deployment blueprint for the EthiopiaSMS web simulator.
+#
+# Deploys the interactive simulator (owner SMS onboarding + public website +
+# tourist↔owner booking bridge) as a free web service with REAL, lightweight
+# translation via the MyMemory API (no 2.4 GB model needed).
+#
+# One-time deploy (see docs/DEPLOY.md):
+#   1. Push this repo to GitHub (done).
+#   2. In Render: New → Blueprint → connect this repo → Apply.
+#   3. Render builds and gives you a public https URL to share with judges.
+
+services:
+  - type: web
+    name: ethiopiasms-simulator
+    runtime: python
+    plan: free
+    # No third-party packages are required for the simulator + MyMemory translator
+    # (standard library only), so the build is just a no-op install step.
+    buildCommand: "python --version"
+    startCommand: "python -m app.web"
+    envVars:
+      - key: ETHIOPIASMS_TRANSLATOR
+        value: mymemory        # real translation via the free MyMemory web API
+      - key: PYTHON_VERSION
+        value: "3.11.9"

@@ -24,6 +24,14 @@ NLLB_CODE = {
     "lit": "lit_Latn",
 }
 
+# ISO-639-1 codes used by the MyMemory web API.
+ISO_CODE = {
+    "eng": "en",
+    "amh": "am",
+    "orm": "om",
+    "lit": "lt",
+}
+
 
 @dataclass
 class TranslationResult:
@@ -96,8 +104,56 @@ class NllbTranslator(Translator):
         return TranslationResult(out, conf, source, target, self.model_name)
 
 
+class MyMemoryTranslator(Translator):
+    """Lightweight real translation via the free MyMemory web API.
+
+    No model download and no API key (anonymous tier), so it fits comfortably on a
+    small free host (e.g. Render) — unlike the 2.4 GB NLLB model. Covers all four
+    languages we need (am / om / lt / en). Falls back gracefully to the original
+    text if the service is unreachable, so the demo never hard-fails.
+
+    Enabled with ETHIOPIASMS_TRANSLATOR=mymemory.
+    """
+
+    ENDPOINT = "https://api.mymemory.translated.net/get"
+
+    def __init__(self, email: str | None = None) -> None:
+        # Providing an email (optional) raises MyMemory's free daily quota.
+        self.email = email or os.environ.get("MYMEMORY_EMAIL")
+
+    def translate(self, text: str, source: str, target: str) -> TranslationResult:
+        if source == target or not text.strip():
+            return TranslationResult(text, 1.0, source, target, "identity")
+        import html
+        import json as _json
+        import urllib.parse
+        import urllib.request
+
+        params = {"q": text, "langpair": f"{ISO_CODE[source]}|{ISO_CODE[target]}"}
+        if self.email:
+            params["de"] = self.email
+        url = f"{self.ENDPOINT}?{urllib.parse.urlencode(params)}"
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "EthiopiaSMS/1.0"})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = _json.loads(resp.read().decode("utf-8"))
+            out = html.unescape(data.get("responseData", {}).get("translatedText") or text)
+            ok = str(data.get("responseStatus")) == "200"
+            conf = (0.6 if source in _LOW_RESOURCE else 0.9) if ok else 0.3
+            return TranslationResult(out, conf, source, target, "mymemory")
+        except Exception:
+            # Never hard-fail the demo on a network hiccup.
+            return TranslationResult(text, 0.3, source, target, "mymemory(unavailable)")
+
+
 def get_translator() -> Translator:
-    """Factory: real NLLB if explicitly enabled, else the mock."""
+    """Factory, selected by environment:
+        ETHIOPIASMS_REAL_NLLB=1          -> local NLLB-200 model (best quality, heavy)
+        ETHIOPIASMS_TRANSLATOR=mymemory  -> free MyMemory web API (light, host-friendly)
+        (default)                        -> mock (instant, offline, placeholder output)
+    """
     if os.environ.get("ETHIOPIASMS_REAL_NLLB") == "1":
         return NllbTranslator()
+    if os.environ.get("ETHIOPIASMS_TRANSLATOR", "").lower() == "mymemory":
+        return MyMemoryTranslator()
     return MockTranslator()
