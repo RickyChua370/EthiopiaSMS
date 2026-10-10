@@ -126,23 +126,39 @@ class MyMemoryTranslator(Translator):
             return TranslationResult(text, 1.0, source, target, "identity")
         import html
         import json as _json
+        import sys
         import urllib.parse
         import urllib.request
 
         params = {"q": text, "langpair": f"{ISO_CODE[source]}|{ISO_CODE[target]}"}
-        if self.email:
-            params["de"] = self.email
+        # An email markedly raises MyMemory's free quota; use a project default if
+        # the operator hasn't supplied one, so the demo doesn't hit the anon limit.
+        params["de"] = self.email or "ethiopiasms.demo@example.com"
         url = f"{self.ENDPOINT}?{urllib.parse.urlencode(params)}"
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "EthiopiaSMS/1.0"})
-            with urllib.request.urlopen(req, timeout=10) as resp:
+            with urllib.request.urlopen(req, timeout=20) as resp:
                 data = _json.loads(resp.read().decode("utf-8"))
-            out = html.unescape(data.get("responseData", {}).get("translatedText") or text)
-            ok = str(data.get("responseStatus")) == "200"
-            conf = (0.6 if source in _LOW_RESOURCE else 0.9) if ok else 0.3
+            rd = data.get("responseData", {}) or {}
+            out = html.unescape(rd.get("translatedText") or "")
+            status = str(data.get("responseStatus"))
+            details = (data.get("responseDetails") or "")
+
+            # MyMemory sometimes returns an ERROR MESSAGE in translatedText with a
+            # non-200 status (e.g. quota reached). Treat those as failures, not text.
+            looks_like_error = out.isupper() and len(out.split()) > 3
+            if status != "200" or not out or looks_like_error:
+                reason = details or out or f"status {status}"
+                print(f"  [translate] MyMemory issue ({source}->{target}): {reason[:120]}",
+                      file=sys.stderr)
+                return TranslationResult(text, 0.3, source, target, "mymemory(unavailable)")
+
+            conf = 0.6 if source in _LOW_RESOURCE else 0.9
             return TranslationResult(out, conf, source, target, "mymemory")
-        except Exception:
-            # Never hard-fail the demo on a network hiccup.
+        except Exception as exc:
+            # Never hard-fail the demo on a network hiccup — but DO log why.
+            print(f"  [translate] MyMemory call failed ({source}->{target}): {exc}",
+                  file=sys.stderr)
             return TranslationResult(text, 0.3, source, target, "mymemory(unavailable)")
 
 

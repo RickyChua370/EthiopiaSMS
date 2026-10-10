@@ -229,8 +229,18 @@ async function lithuanianTest(){
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({text: sample, source:'eng', target:'lit'})});
     const data = await res.json();
-    add("Lietuvių (Lithuanian): " + data.text, "out");
-    add("Engine: " + data.engine + (data.mock ? " — enable real NLLB for live translation" : ""), "out");
+    if (data.mock) {
+      add("⚠️ Running with placeholder (mock) translation. Start the server with "
+          + "ETHIOPIASMS_TRANSLATOR=mymemory (or ETHIOPIASMS_REAL_NLLB=1) for real "
+          + "Lithuanian.", "out");
+    } else if ((data.engine || "").indexOf("unavailable") !== -1) {
+      add("⚠️ The translation service couldn't be reached just now, so the text "
+          + "wasn't translated. Check the server's internet connection and try "
+          + "again.", "out");
+    } else {
+      add("Lietuvių (Lithuanian): " + data.text, "out");
+      add("Engine: " + data.engine, "out");
+    }
   } catch(e){
     add("Translation unavailable in this session.", "out");
   }
