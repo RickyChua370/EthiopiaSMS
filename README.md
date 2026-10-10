@@ -66,6 +66,10 @@ python -m app.bridge_demo
 The website's **"💬 Message on Telegram"** button on each listing deep-links a tourist
 into the bot for that specific business.
 
+The **web simulator** (`python -m app.web`) also shows the booking bridge visually: a
+tourist's Telegram chat and the owner's SMS phone side by side, so you can watch an
+inquiry get relayed and translated both ways — no terminal needed.
+
 ### Run a LIVE Telegram bot (real tourists, mock owner)
 
 You can let real people message a real Telegram bot while you play the owner in your
