@@ -78,6 +78,68 @@ def _card(listing: Listing) -> str:
       </article>"""
 
 
+# Revenue products shown on the public site: a customisable itinerary planner, with
+# tiered passes that also bundle SMS "texting credits" (used to message MSME owners
+# via the Telegram↔SMS bridge). Prices in EUR.
+PLANS = [
+    {"name": "Day Pass", "price": "1", "benefit": "3× 1-day itineraries in one village / town",
+     "credits": "5 SMS credits", "featured": False},
+    {"name": "Trip Pack", "price": "3", "benefit": "3× 3-day itineraries in one region",
+     "credits": "20 SMS credits", "featured": True},
+    {"name": "Route Pass", "price": "5", "benefit": "5× 5–7 day itineraries across multiple regions",
+     "credits": "Unlimited SMS credits", "featured": False},
+    {"name": "Message Top-up", "price": "2", "benefit": "15× extra vendor SMS texts",
+     "credits": "15 SMS credits", "featured": False},
+]
+
+
+def _pricing_section() -> str:
+    cards = []
+    for p in PLANS:
+        tag = '<span class="tag">Most popular</span>' if p["featured"] else ""
+        cls = "plan featured" if p["featured"] else "plan"
+        choose_cls = "choose" if p["featured"] else "choose ghost"
+        cards.append(f"""      <div class="{cls}">
+        {tag}
+        <h3>{p['name']}</h3>
+        <div class="price">€{p['price']} <small>one-off</small></div>
+        <p class="benefit">{p['benefit']}</p>
+        <span class="credits">💬 {p['credits']}</span>
+        <a class="{choose_cls}" href="#" onclick="return choosePlan('{p['name']}')">Choose {p['name']}</a>
+      </div>""")
+    plans_html = "\n".join(cards)
+    return f"""  <section class="pricing" id="plans">
+    <div class="pricing-inner">
+      <h2>Plan your trip — and reach the businesses</h2>
+      <p class="lede">Buy a pass to generate custom itineraries from real local reviews, and
+         get SMS credits to message MSME owners directly for prices, directions and bookings.</p>
+
+      <div class="features">
+        <div class="feature">
+          <h3>🗺️ Customisable itinerary planner</h3>
+          <ul>
+            <li>Itineraries built from tourist reviews — by trip length, location &amp; preferences.</li>
+            <li>A nominal fee for convenient, ready-to-go trip planning.</li>
+          </ul>
+        </div>
+        <div class="feature">
+          <h3>💬 Texting credits</h3>
+          <ul>
+            <li>Message MSME operators directly for more information.</li>
+            <li>Credits are included with every itinerary plan you buy.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="plans">
+{plans_html}
+      </div>
+      <p class="note">Prototype pricing shown for demonstration. Checkout &amp; payments are
+         not yet connected — selecting a plan is illustrative only.</p>
+    </div>
+  </section>"""
+
+
 def render_html(listings: list[Listing]) -> str:
     cards = "\n".join(_card(l) for l in listings) or '<p class="empty">No listings yet.</p>'
     categories = sorted({l.category_en for l in listings})
@@ -128,6 +190,34 @@ def render_html(listings: list[Listing]) -> str:
     .map {{ background:#eef5ef; color:var(--accent); }}
     footer {{ text-align:center; padding:1.5rem 1rem; font-size:.8rem; color:#888; }}
     .empty {{ grid-column:1/-1; text-align:center; color:#888; padding:2rem; }}
+    /* pricing / plans section */
+    .pricing {{ background:#fff; border-top:1px solid #e7e2d8; padding:2.5rem 1rem; }}
+    .pricing-inner {{ max-width:1050px; margin:0 auto; }}
+    .pricing h2 {{ text-align:center; color:var(--accent); margin:0 0 .25rem; font-size:1.6rem; }}
+    .pricing .lede {{ text-align:center; color:#555; margin:0 auto 2rem; max-width:640px; font-size:.95rem; }}
+    .features {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+                 gap:1.25rem; margin-bottom:2rem; }}
+    .feature {{ border:1px solid #e7e2d8; border-radius:12px; padding:1.1rem 1.25rem; background:#faf8f3; }}
+    .feature h3 {{ margin:0 0 .5rem; color:#1a1a1a; font-size:1.05rem; }}
+    .feature ul {{ margin:0; padding-left:1.1rem; color:#444; font-size:.9rem; }}
+    .feature li {{ margin:.3rem 0; }}
+    .plans {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:1.1rem; }}
+    .plan {{ border:1px solid #e7e2d8; border-radius:14px; padding:1.25rem; display:flex;
+             flex-direction:column; box-shadow:0 1px 3px rgba(0,0,0,.05); position:relative; }}
+    .plan.featured {{ border-color:var(--accent); box-shadow:0 4px 16px rgba(10,125,60,.15); }}
+    .plan .tag {{ position:absolute; top:-11px; left:50%; transform:translateX(-50%);
+                  background:var(--accent); color:#fff; font-size:.68rem; padding:.15rem .6rem;
+                  border-radius:999px; letter-spacing:.03em; }}
+    .plan h3 {{ margin:.25rem 0 .25rem; font-size:1.1rem; }}
+    .plan .price {{ font-size:1.9rem; font-weight:700; color:var(--accent); }}
+    .plan .price small {{ font-size:.8rem; color:#888; font-weight:400; }}
+    .plan .benefit {{ color:#444; font-size:.9rem; margin:.6rem 0; flex:1; }}
+    .plan .credits {{ font-size:.82rem; color:#0a7d3c; background:#eef5ef; border-radius:999px;
+                      padding:.2rem .6rem; align-self:flex-start; }}
+    .plan .choose {{ margin-top:1rem; text-align:center; text-decoration:none; background:var(--accent);
+                     color:#fff; border-radius:8px; padding:.55rem; font-size:.9rem; }}
+    .plan .choose.ghost {{ background:#eef5ef; color:var(--accent); }}
+    .pricing .note {{ text-align:center; color:#999; font-size:.78rem; margin-top:1.25rem; }}
   </style>
 </head>
 <body>
@@ -148,6 +238,7 @@ def render_html(listings: list[Listing]) -> str:
       {loc_options}
     </select>
     <button type="button" onclick="resetFilters()">Clear</button>
+    <a href="#plans" style="text-decoration:none;"><button type="button">💶 Plans &amp; pricing</button></a>
   </div>
   <div class="count" id="count">{total} businesses</div>
 
@@ -155,6 +246,8 @@ def render_html(listings: list[Listing]) -> str:
 {cards}
     <p class="empty" id="noresults" style="display:none">No businesses match your search. Try clearing the filters.</p>
   </main>
+
+{_pricing_section()}
 
   <footer>
     Tap <strong>Message on Telegram</strong> to reach a business free of charge — your
@@ -189,6 +282,12 @@ def render_html(listings: list[Listing]) -> str:
       document.getElementById('cat').value = '';
       document.getElementById('loc').value = '';
       applyFilters();
+    }}
+    function choosePlan(name) {{
+      alert("You chose the " + name + " plan.\\n\\nThis is a prototype — payment "
+            + "checkout isn't connected yet. In the full product this would start "
+            + "secure payment and credit your SMS texting balance.");
+      return false;
     }}
   </script>
 </body>
