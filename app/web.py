@@ -141,10 +141,7 @@ PAGE = """<!DOCTYPE html>
   .tg-bar { background:#2aabee; }        /* Telegram blue for the tourist side */
   .tg-in { background:#cfeffd; }         /* tourist's own messages */
   .biz-pick { padding:.5rem .75rem; background:#f7f7f7; border-top:1px solid #eee; font-size:.78rem; }
-  .biz-pick select { width:100%; padding:.4rem; border:1px solid #cbd5cf; border-radius:6px; margin-top:.25rem; }
-  .biz-chip { border:1px solid #cbd5cf; background:#fff; border-radius:999px; padding:.15rem .5rem;
-              font-size:.72rem; cursor:pointer; color:#2563eb; }
-  .biz-chip:hover { background:#eef3ff; }
+  .biz-pick select { width:100%; padding:.45rem; border:1px solid #cbd5cf; border-radius:6px; font-size:.8rem; }
 </style>
 </head>
 <body>
@@ -203,21 +200,9 @@ PAGE = """<!DOCTYPE html>
         <div class="msgs" id="tg-msgs"></div>
         <div class="biz-pick">
           <label for="biz">Which business are you enquiring about?</label>
-          <div style="display:flex; gap:.35rem; margin-top:.25rem;">
-            <input id="biz" list="biz-list" placeholder="Type a business name…"
-                   style="flex:1; padding:.4rem; border:1px solid #cbd5cf; border-radius:6px;"
-                   onkeydown="if(event.key==='Enter')startBooking()">
-            <datalist id="biz-list"></datalist>
-            <button onclick="startBooking()"
-                    style="border:0; background:#2aabee; color:#fff; border-radius:6px; padding:0 .7rem; cursor:pointer;">Connect</button>
-          </div>
-          <div style="margin-top:.35rem; display:flex; flex-wrap:wrap; gap:.25rem;">
-            <button type="button" class="biz-chip" onclick="pickBiz('Sheraton Addis')">Sheraton Addis</button>
-            <button type="button" class="biz-chip" onclick="pickBiz('Ben Abeba Restaurant')">Ben Abeba Restaurant</button>
-            <button type="button" class="biz-chip" onclick="pickBiz('Gondar Backpackers')">Gondar Backpackers</button>
-            <button type="button" class="biz-chip" onclick="pickBiz('Abay Minch Lodge')">Abay Minch Lodge</button>
-            <button type="button" class="biz-chip" onclick="pickBiz('Ambrosia Cafe')">Ambrosia Cafe</button>
-          </div>
+          <select id="biz" onchange="startBooking()" style="margin-top:.25rem;">
+            <option value="">Loading businesses…</option>
+          </select>
           <div id="biz-status" style="margin-top:.3rem; color:#777;"></div>
         </div>
         <div class="quick" id="bk-quick">
@@ -265,9 +250,12 @@ document.getElementById('who').textContent = "("+phone+")";
 let BUSINESSES = [];
 fetch('/businesses').then(r=>r.json()).then(list=>{
   BUSINESSES = list;
-  // populate the booking autocomplete datalist
-  const dl = document.getElementById('biz-list');
-  if (dl) { dl.innerHTML = list.map(b=>`<option value="${b.name}">`).join(''); }
+  // populate the booking dropdown with all businesses, then connect to the first
+  const sel = document.getElementById('biz');
+  if (sel) {
+    sel.innerHTML = list.map(b=>`<option value="${b.name}">${b.name} — ${b.category_en}</option>`).join('');
+    startBooking();
+  }
 });
 
 // Greeting word per onboarding language (triggers language detection).
@@ -349,14 +337,10 @@ function addTo(elId, text, cls){
   const d=document.createElement('div'); d.className='b '+cls; d.textContent=text;
   const m=document.getElementById(elId); m.appendChild(d); m.scrollTop=m.scrollHeight;
 }
-function pickBiz(name){
-  document.getElementById('biz').value = name;
-  startBooking();
-}
 async function startBooking(){
   const query = document.getElementById('biz').value.trim();
   const status = document.getElementById('biz-status');
-  if(!query){ status.textContent = "Type a business name to connect."; status.style.color="#c33"; return; }
+  if(!query){ status.textContent = "Select a business to connect."; status.style.color="#c33"; return; }
   const res = await fetch('/booking/start',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({business: query})});
   const data = await res.json();
@@ -459,13 +443,8 @@ async function pollBooking(){
   } catch(e){}
   setTimeout(pollBooking, 1200);
 }
-// Pre-fill a well-known business so the booking demo is usable immediately, then
-// connect once the business list has loaded.
-(function initBooking(){
-  const bizInput = document.getElementById('biz');
-  if (bizInput && !bizInput.value) bizInput.value = "Sheraton Addis";
-  startBooking();
-})();
+// The booking dropdown is populated (and the first business auto-connected) by the
+// /businesses fetch above once it resolves.
 pollBooking();
 </script>
 </body>
