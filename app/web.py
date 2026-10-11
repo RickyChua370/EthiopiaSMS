@@ -210,6 +210,14 @@ PAGE = """<!DOCTYPE html>
           </div>
           <div id="biz-status" style="margin-top:.3rem; color:#777;"></div>
         </div>
+        <div class="quick" id="bk-quick">
+          <b>Auto-play a booking:</b>
+          <div>
+            <button onclick="autoBooking('amh')">🇪🇹 Owner replies in Amharic</button>
+            <button onclick="autoBooking('orm')">Owner replies in Oromo</button>
+            <button onclick="autoBooking('alt')">🔀 Alternate Amharic / Oromo</button>
+          </div>
+        </div>
         <div class="compose">
           <input id="tg-inp" placeholder="Ask the business (English)…" autocomplete="off"
                  onkeydown="if(event.key==='Enter')touristSend()">
@@ -360,6 +368,57 @@ async function ownerSend(){
   await fetch('/booking/owner',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({text})});
 }
+
+/* ---- Auto-play a booking conversation (tourist EN <-> owner am/om) ---- */
+// Programmatic sends that reuse the same endpoints as the manual buttons.
+async function autoTourist(text){
+  addTo('tg-msgs', text, 'in tg-in');
+  await fetch('/booking/tourist',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({text})});
+}
+async function autoOwner(text, lang){
+  const label = lang === 'orm' ? 'Afaan Oromo' : (lang === 'amh' ? 'Amharic' : '');
+  addTo('own-msgs', (label ? '('+label+') ' : '') + text, 'in');
+  await fetch('/booking/owner',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({text, lang})});
+}
+const sleep = ms => new Promise(r=>setTimeout(r, ms));
+
+// A short booking exchange: each turn has the tourist's English question plus the
+// owner's reply in Amharic and in Oromo (we pick per the chosen mode).
+const BOOKING_TURNS = [
+  { tourist: "Hello! Do you have a room for two nights?",
+    amh: "\u1230\u120b\u121d! \u12a0\u12cb\u129d\u1363 \u1208\u1201\u1208\u1275 \u120a\u120a\u1275 \u12ad\u134d\u120d \u12a0\u1208\u1295\u1362",
+    orm: "Akkam! Eeyyee, kutaa halkan lamaaf qabna." },
+  { tourist: "Great. How much per night?",
+    amh: "\u1260\u12e8\u120a\u120a\u1271 1500 \u1265\u122d \u1290\u12cd\u1362",
+    orm: "Halkan tokkoof 1500 birrii dha." },
+  { tourist: "Perfect. Can I check in at 2pm tomorrow?",
+    amh: "\u12a0\u12eb\u120d \u1230\u12d3\u1271 8 \u1230\u12d3\u1275 \u1218\u130d\u1263\u1275 \u12ed\u127d\u120b\u1209\u1362",
+    orm: "Eeyyee, bor sa'aa 8tti seenuu dandeessu." },
+  { tourist: "Thank you, see you tomorrow!",
+    amh: "\u12a5\u1295\u12b3\u1295 \u12f0\u1205\u1293 \u1218\u1321! \u1290\u1308 \u1263\u12ed\u1290\u1275\u1362",
+    orm: "Galatoomaa! Bor wal arganna." },
+];
+
+let bookingPlaying = false;
+async function autoBooking(mode){
+  if (bookingPlaying) return;
+  bookingPlaying = true;
+  // Ensure a thread exists (connect to the business currently in the box).
+  await startBooking();
+  await sleep(600);
+  for (let i = 0; i < BOOKING_TURNS.length; i++){
+    const turn = BOOKING_TURNS[i];
+    await autoTourist(turn.tourist);
+    await sleep(1400);                       // let the relay + translation show
+    let lang = mode;
+    if (mode === 'alt') lang = (i % 2 === 0) ? 'amh' : 'orm';
+    await autoOwner(turn[lang], lang);
+    await sleep(1600);
+  }
+  bookingPlaying = false;
+}
 // Poll for relayed messages and render them on the correct side.
 async function pollBooking(){
   try {
@@ -461,11 +520,16 @@ class Handler(BaseHTTPRequestHandler):
                 _bk_tg.receive(_BK_CHAT, text)
             self._send(200, b'{"ok":true}', "application/json; charset=utf-8")
         elif path == "/booking/owner":
-            # Owner replies by SMS (in their language).
+            # Owner replies by SMS (in their language). An optional 'lang' lets the
+            # auto-play demo state which language this reply is in, so the bridge
+            # translates it from the right source language.
             text = str(payload.get("text", ""))
+            lang = str(payload.get("lang", "")).strip()
             thread = _bridge.thread_for_chat(_BK_CHAT)
             if thread:
                 with _lock:
+                    if lang in ("amh", "orm", "eng"):
+                        thread.owner_lang = lang
                     _bk_sms.receive(thread.owner_phone, f"[{thread.ref}] {text}")
             self._send(200, b'{"ok":true}', "application/json; charset=utf-8")
         else:
