@@ -59,3 +59,22 @@ def test_multiple_cities_and_categories_in_filters():
     # a few known cities should appear as filter options
     for city in ["Addis Ababa", "Lalibela", "Gondar", "Hawassa"]:
         assert f'>{city}</option>' in html
+
+
+def test_pricing_section_renders_all_plans():
+    html = render_html(_listings_from_real())
+    assert 'id="plans"' in html
+    for plan in ["Day Pass", "Trip Pack", "Route Pass", "Message Top-up"]:
+        assert plan in html
+    # the four EUR prices from the revenue model
+    for price in ["€1", "€2", "€3", "€5"]:
+        assert price in html
+    # both revenue products described
+    assert "itinerary planner" in html.lower()
+    assert "texting credits" in html.lower()
+
+
+def test_pricing_checkout_is_clearly_prototype():
+    html = render_html(_listings_from_real())
+    # must not imply real payment is wired up
+    assert "not yet connected" in html.lower() or "prototype" in html.lower()
