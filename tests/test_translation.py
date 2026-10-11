@@ -72,14 +72,45 @@ def test_mymemory_handles_api_via_monkeypatched_urlopen(monkeypatch):
 
 
 def test_mymemory_network_failure_falls_back(monkeypatch):
+    import time
     import urllib.request
 
     def boom(*a, **k):
         raise OSError("no network")
 
     monkeypatch.setattr(urllib.request, "urlopen", boom)
+    monkeypatch.setattr(time, "sleep", lambda *_: None)  # skip retry backoff in tests
     r = MyMemoryTranslator().translate("Hello", "eng", "lit")
-    # falls back to original text, low confidence, never raises
+    # both providers fail -> falls back to original text, low confidence, never raises
     assert r.text == "Hello"
     assert r.confidence == 0.3
     assert "unavailable" in r.engine
+
+
+def test_libretranslate_fallback_when_mymemory_fails(monkeypatch):
+    """If MyMemory returns nothing but LibreTranslate works, we still get a result."""
+    import io
+    import json
+    import time
+    import urllib.request
+
+    monkeypatch.setattr(time, "sleep", lambda *_: None)
+
+    class FakeResp(io.BytesIO):
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    calls = {"n": 0}
+
+    def fake_urlopen(req, *a, **k):
+        calls["n"] += 1
+        url = req.full_url if hasattr(req, "full_url") else str(req)
+        if "mymemory" in url:
+            raise OSError("mymemory down")
+        # LibreTranslate success
+        return FakeResp(json.dumps({"translatedText": "Labas"}).encode("utf-8"))
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    r = MyMemoryTranslator().translate("Hello", "eng", "lit")
+    assert r.text == "Labas"
+    assert r.engine == "libretranslate"

@@ -121,45 +121,90 @@ class MyMemoryTranslator(Translator):
         # Providing an email (optional) raises MyMemory's free daily quota.
         self.email = email or os.environ.get("MYMEMORY_EMAIL")
 
+    # Secondary provider used only if MyMemory fails, so one service hiccup doesn't
+    # break the demo. LibreTranslate public instance, no key needed.
+    LIBRE_ENDPOINT = "https://libretranslate.com/translate"
+
     def translate(self, text: str, source: str, target: str) -> TranslationResult:
         if source == target or not text.strip():
             return TranslationResult(text, 1.0, source, target, "identity")
+
+        conf = 0.6 if source in _LOW_RESOURCE else 0.9
+
+        # 1) MyMemory with up to 2 retries (handles transient timeouts/rate-limits).
+        out = self._mymemory(text, source, target, attempts=2)
+        if out is not None:
+            return TranslationResult(out, conf, source, target, "mymemory")
+
+        # 2) Fallback to LibreTranslate so a single-provider hiccup doesn't fail.
+        out = self._libre(text, source, target)
+        if out is not None:
+            return TranslationResult(out, conf, source, target, "libretranslate")
+
+        # 3) Both unavailable — honest fallback (never hard-fail the demo).
+        return TranslationResult(text, 0.3, source, target, "unavailable")
+
+    # -- providers -----------------------------------------------------------
+
+    def _mymemory(self, text: str, source: str, target: str, attempts: int = 2):
         import html
         import json as _json
         import sys
+        import time
         import urllib.parse
         import urllib.request
 
-        params = {"q": text, "langpair": f"{ISO_CODE[source]}|{ISO_CODE[target]}"}
-        # An email markedly raises MyMemory's free quota; use a project default if
-        # the operator hasn't supplied one, so the demo doesn't hit the anon limit.
-        params["de"] = self.email or "ethiopiasms.demo@example.com"
+        params = {
+            "q": text,
+            "langpair": f"{ISO_CODE[source]}|{ISO_CODE[target]}",
+            "de": self.email or "ethiopiasms.demo@example.com",
+        }
         url = f"{self.ENDPOINT}?{urllib.parse.urlencode(params)}"
+        for attempt in range(1, attempts + 1):
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": "EthiopiaSMS/1.0"})
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    data = _json.loads(resp.read().decode("utf-8"))
+                rd = data.get("responseData", {}) or {}
+                out = html.unescape(rd.get("translatedText") or "")
+                status = str(data.get("responseStatus"))
+                looks_like_error = out.isupper() and len(out.split()) > 3
+                if status == "200" and out and not looks_like_error:
+                    return out
+                reason = (data.get("responseDetails") or out or f"status {status}")
+                print(f"  [translate] MyMemory issue ({source}->{target}, try {attempt}): "
+                      f"{reason[:120]}", file=sys.stderr)
+            except Exception as exc:
+                print(f"  [translate] MyMemory call failed ({source}->{target}, try "
+                      f"{attempt}): {exc}", file=sys.stderr)
+            if attempt < attempts:
+                time.sleep(1.0 * attempt)  # simple backoff
+        return None
+
+    def _libre(self, text: str, source: str, target: str):
+        import json as _json
+        import sys
+        import urllib.request
+
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "EthiopiaSMS/1.0"})
-            with urllib.request.urlopen(req, timeout=20) as resp:
+            payload = _json.dumps({
+                "q": text, "source": ISO_CODE[source], "target": ISO_CODE[target],
+                "format": "text",
+            }).encode("utf-8")
+            req = urllib.request.Request(
+                self.LIBRE_ENDPOINT, data=payload,
+                headers={"Content-Type": "application/json", "User-Agent": "EthiopiaSMS/1.0"},
+            )
+            with urllib.request.urlopen(req, timeout=30) as resp:
                 data = _json.loads(resp.read().decode("utf-8"))
-            rd = data.get("responseData", {}) or {}
-            out = html.unescape(rd.get("translatedText") or "")
-            status = str(data.get("responseStatus"))
-            details = (data.get("responseDetails") or "")
-
-            # MyMemory sometimes returns an ERROR MESSAGE in translatedText with a
-            # non-200 status (e.g. quota reached). Treat those as failures, not text.
-            looks_like_error = out.isupper() and len(out.split()) > 3
-            if status != "200" or not out or looks_like_error:
-                reason = details or out or f"status {status}"
-                print(f"  [translate] MyMemory issue ({source}->{target}): {reason[:120]}",
-                      file=sys.stderr)
-                return TranslationResult(text, 0.3, source, target, "mymemory(unavailable)")
-
-            conf = 0.6 if source in _LOW_RESOURCE else 0.9
-            return TranslationResult(out, conf, source, target, "mymemory")
+            out = data.get("translatedText")
+            if out:
+                return out
+            print(f"  [translate] LibreTranslate empty ({source}->{target})", file=sys.stderr)
         except Exception as exc:
-            # Never hard-fail the demo on a network hiccup — but DO log why.
-            print(f"  [translate] MyMemory call failed ({source}->{target}): {exc}",
+            print(f"  [translate] LibreTranslate failed ({source}->{target}): {exc}",
                   file=sys.stderr)
-            return TranslationResult(text, 0.3, source, target, "mymemory(unavailable)")
+        return None
 
 
 def get_translator() -> Translator:
