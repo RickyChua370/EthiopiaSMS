@@ -25,6 +25,55 @@ from app.bridge.hub import BridgeHub
 from app.conversation.flow import ConversationEngine
 from app.site.generator import render_html
 from app.store.listings import ListingStore
+from data.categories import get_category
+from data.real_osm_listings import REAL_BUSINESSES
+
+
+def _owner_lang_for(category_id: int, lat: float) -> str:
+    """Infer a plausible owner language for the demo from the business location.
+
+    Oromia-ish longitudes lean Afaan Oromo; otherwise Amharic. English owners are
+    rare, so we only use it for a couple of well-known international venues. This is
+    a demo heuristic, not a real data field.
+    """
+    return "orm" if lat < 8.5 else "amh"
+
+
+def _businesses_json() -> list[dict]:
+    """The 30 real businesses, shaped for the simulator's quick-fill + booking lookup."""
+    out = []
+    for name, cat_id, phone, lat, lon, desc, _photo in REAL_BUSINESSES:
+        cat = get_category(cat_id)
+        lang = "eng" if name in ("Sheraton Addis",) else _owner_lang_for(cat_id, lat)
+        out.append({
+            "name": name,
+            "category_id": cat_id,
+            "category_en": cat.en if cat else "Other",
+            "phone": phone,
+            "lat": lat,
+            "lon": lon,
+            "description": desc,
+            "owner_lang": lang,
+        })
+    return out
+
+
+_BUSINESSES = _businesses_json()
+
+
+def _find_business(query: str) -> dict | None:
+    """Case-insensitive match of a typed business name against the 30 (exact first,
+    then substring either way)."""
+    q = (query or "").strip().lower()
+    if not q:
+        return None
+    for b in _BUSINESSES:
+        if b["name"].lower() == q:
+            return b
+    for b in _BUSINESSES:
+        if q in b["name"].lower() or b["name"].lower() in q:
+            return b
+    return None
 
 import os as _os
 HOST = "0.0.0.0"
@@ -110,9 +159,9 @@ PAGE = """<!DOCTYPE html>
         <div class="quick" id="quick">
           <b>Quick fill:</b>
           <div>
-            <button onclick="fill('en')">🇬🇧 English flow</button>
-            <button onclick="fill('am')">🇪🇹 Amharic flow</button>
-            <button onclick="fill('om')">Oromo flow</button>
+            <button onclick="fill('eng')">🇬🇧 Onboard a random business (English)</button>
+            <button onclick="fill('amh')">🇪🇹 …in Amharic</button>
+            <button onclick="fill('orm')">…in Oromo</button>
             <button onclick="lithuanianTest()">🇱🇹 Lithuanian (judge test)</button>
           </div>
         </div>
@@ -139,8 +188,8 @@ PAGE = """<!DOCTYPE html>
 <div class="section-sub">
   A tourist chats for <b>free on Telegram</b>; the message is translated and relayed to the
   owner as a cheap <b>local SMS</b>. The owner replies by SMS and it comes back to the
-  tourist — no expensive international SMS. Pick a business, send an inquiry on the left,
-  then reply as the owner on the right.
+  tourist — no expensive international SMS. Type the business you want (any from the
+  website listings), send an inquiry on the left, then reply as the owner on the right.
 </div>
 <div class="wrap">
   <!-- Tourist side (Telegram) -->
@@ -150,12 +199,16 @@ PAGE = """<!DOCTYPE html>
         <div class="bar tg-bar">🧳 Tourist · Telegram</div>
         <div class="msgs" id="tg-msgs"></div>
         <div class="biz-pick">
-          <label for="biz">Inquiring about:</label>
-          <select id="biz" onchange="startBooking()">
-            <option value="Tomoca Coffee|+251911223344|amh">Tomoca Coffee (Amharic owner)</option>
-            <option value="Harka Hojii Aadaa|+251922556677|orm">Harka Hojii Aadaa (Oromo owner)</option>
-            <option value="Sheraton Addis|+251115171717|eng">Sheraton Addis (English owner)</option>
-          </select>
+          <label for="biz">Which business are you enquiring about?</label>
+          <div style="display:flex; gap:.35rem; margin-top:.25rem;">
+            <input id="biz" list="biz-list" placeholder="Type a business name…"
+                   style="flex:1; padding:.4rem; border:1px solid #cbd5cf; border-radius:6px;"
+                   onkeydown="if(event.key==='Enter')startBooking()">
+            <datalist id="biz-list"></datalist>
+            <button onclick="startBooking()"
+                    style="border:0; background:#2aabee; color:#fff; border-radius:6px; padding:0 .7rem; cursor:pointer;">Connect</button>
+          </div>
+          <div id="biz-status" style="margin-top:.3rem; color:#777;"></div>
         </div>
         <div class="compose">
           <input id="tg-inp" placeholder="Ask the business (English)…" autocomplete="off"
@@ -189,15 +242,33 @@ let phone = newPhone();
 function newPhone(){ return "+2519" + Math.floor(10000000 + Math.random()*89999999); }
 document.getElementById('who').textContent = "("+phone+")";
 
-const scripts = {
-  en: ["hello","2","Tomoca Coffee","150 birr","9.0105, 38.7612",
-       "Historic coffee house in the heart of Addis Ababa, roasting since 1953."],
-  am: ["\u1230\u120b\u121d","1","\u12e8\u1200\u1260\u123b \u121d\u130d\u1265 \u1264\u1275","200 \u1265\u122d",
-       "9.0300, 38.7600","\u1263\u1205\u120b\u12ca \u12e8\u12a2\u1275\u12ee\u1335\u12eb \u121d\u130d\u1265\u1362"],
-  om: ["nagaa","4","Harka Hojii Aadaa","skip","7.0500, 38.4700",
-       "Meeshaalee aadaa harkaan hojjetaman gurgurra."]
-};
+// The 30 real businesses, loaded from the server; power the quick-fill + booking box.
+let BUSINESSES = [];
+fetch('/businesses').then(r=>r.json()).then(list=>{
+  BUSINESSES = list;
+  // populate the booking autocomplete datalist
+  const dl = document.getElementById('biz-list');
+  if (dl) { dl.innerHTML = list.map(b=>`<option value="${b.name}">`).join(''); }
+});
+
+// Greeting word per onboarding language (triggers language detection).
+const GREETING = {eng:"hello", amh:"\u1230\u120b\u121d", orm:"nagaa"};
 let queue = [];
+
+// Build an onboarding conversation (owner messages) for a real business, in the
+// given input language. We send the category number, then the (real) name,
+// a sample price, the real coordinates, and a short description.
+function scriptFor(biz, lang){
+  const price = (biz.category_id === 3) ? "800 birr"
+              : (biz.category_id === 1 || biz.category_id === 2) ? "150 birr" : "skip";
+  const coords = biz.lat.toFixed(4) + ", " + biz.lon.toFixed(4);
+  return [GREETING[lang] || "hello",
+          String(biz.category_id),
+          biz.name,
+          price,
+          coords,
+          biz.description];
+}
 
 function add(text, cls){
   const d=document.createElement('div'); d.className='b '+cls; d.textContent=text;
@@ -215,7 +286,11 @@ async function send(){
   if(queue.length){ setTimeout(()=>{ document.getElementById('inp').value=queue.shift(); send(); }, 500); }
 }
 function fill(lang){
-  queue = scripts[lang].slice();
+  if (!BUSINESSES.length){ alert("Still loading businesses — try again in a moment."); return; }
+  const biz = BUSINESSES[Math.floor(Math.random()*BUSINESSES.length)];
+  reset();                                   // fresh owner each time
+  add("(demo: onboarding \u201c" + biz.name + "\u201d)", "out");
+  queue = scriptFor(biz, lang);
   document.getElementById('inp').value = queue.shift(); send();
 }
 // Judge aid: translate an English listing sentence to Lithuanian so Lithuanian
@@ -255,16 +330,23 @@ function addTo(elId, text, cls){
   const d=document.createElement('div'); d.className='b '+cls; d.textContent=text;
   const m=document.getElementById(elId); m.appendChild(d); m.scrollTop=m.scrollHeight;
 }
-function currentBiz(){
-  const [name,phone,lang] = document.getElementById('biz').value.split('|');
-  return {name, phone, lang};
-}
 async function startBooking(){
-  const b = currentBiz();
+  const query = document.getElementById('biz').value.trim();
+  const status = document.getElementById('biz-status');
+  if(!query){ status.textContent = "Type a business name to connect."; status.style.color="#c33"; return; }
+  const res = await fetch('/booking/start',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({business: query})});
+  const data = await res.json();
+  if(!data.ok){
+    status.textContent = data.error || "Business not found.";
+    status.style.color = "#c33";
+    return;
+  }
+  // connected: clear both chats and confirm
   document.getElementById('tg-msgs').innerHTML='';
   document.getElementById('own-msgs').innerHTML='';
-  await fetch('/booking/start',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({business:b.name, owner_phone:b.phone, owner_lang:b.lang})});
+  status.textContent = "Connected to " + data.name + " · " + data.category;
+  status.style.color = "#0a7d3c";
 }
 async function touristSend(){
   const inp=document.getElementById('tg-inp'); const text=inp.value.trim();
@@ -287,7 +369,13 @@ async function pollBooking(){
   } catch(e){}
   setTimeout(pollBooking, 1200);
 }
-startBooking();   // open the first thread on load
+// Pre-fill a well-known business so the booking demo is usable immediately, then
+// connect once the business list has loaded.
+(function initBooking(){
+  const bizInput = document.getElementById('biz');
+  if (bizInput && !bizInput.value) bizInput.value = "Sheraton Addis";
+  startBooking();
+})();
 pollBooking();
 </script>
 </body>
@@ -321,6 +409,10 @@ class Handler(BaseHTTPRequestHandler):
                 _bk_sms_seen = len(_bk_sms.outbox)
             self._send(200, json.dumps({"tourist": tourist, "owner": owner}).encode("utf-8"),
                        "application/json; charset=utf-8")
+        elif path == "/businesses":
+            # The 30 real listings — powers the quick-fill and booking autocomplete.
+            self._send(200, json.dumps(_BUSINESSES).encode("utf-8"),
+                       "application/json; charset=utf-8")
         else:
             self._send(404, b"not found", "text/plain")
 
@@ -346,13 +438,22 @@ class Handler(BaseHTTPRequestHandler):
                 "text": result.text, "engine": result.engine, "mock": is_mock,
             }).encode("utf-8"), "application/json; charset=utf-8")
         elif path == "/booking/start":
-            # Tourist taps "Message on Telegram" for a business.
-            name = str(payload.get("business", "a business"))
-            phone = str(payload.get("owner_phone", "+251911223344"))
-            lang = str(payload.get("owner_lang", "amh"))
+            # Tourist types the business they want to enquire about; look it up in
+            # the 30 real listings and connect them to that owner.
+            query = str(payload.get("business", ""))
+            biz = _find_business(query)
+            if not biz:
+                self._send(200, json.dumps({
+                    "ok": False,
+                    "error": f"No business matching \u201c{query}\u201d. "
+                             "Try a name from the website listings.",
+                }).encode("utf-8"), "application/json; charset=utf-8")
+                return
             with _lock:
-                _bridge.start_inquiry(_BK_CHAT, phone, lang, name)
-            self._send(200, b'{"ok":true}', "application/json; charset=utf-8")
+                _bridge.start_inquiry(_BK_CHAT, biz["phone"], biz["owner_lang"], biz["name"])
+            self._send(200, json.dumps({
+                "ok": True, "name": biz["name"], "category": biz["category_en"],
+            }).encode("utf-8"), "application/json; charset=utf-8")
         elif path == "/booking/tourist":
             # Tourist sends a message (English) via Telegram.
             text = str(payload.get("text", ""))
