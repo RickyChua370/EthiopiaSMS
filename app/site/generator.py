@@ -12,6 +12,7 @@ yet — we never fill the gap with stock imagery of a place we don't represent.
 
 from __future__ import annotations
 
+import hashlib
 import html
 import json
 from pathlib import Path
@@ -19,6 +20,68 @@ from pathlib import Path
 from app.store.listings import Listing, ListingStore
 
 DEFAULT_OUTPUT = Path("docs/site")
+
+# --- SAMPLE (illustrative, NOT real) tourist reviews -------------------------
+# These are fictional, used only to show how reviews would look. A disclaimer is
+# shown on the page. Reviews are assigned deterministically per business (seeded by
+# name) so a given listing always shows the same set across rebuilds — and a couple
+# of businesses are intentionally left with none, which is realistic.
+_SAMPLE_REVIEWS = [
+    (5, "Alex", "Absolutely wonderful — warm hosts and a real local feel."),
+    (5, "Mira", "A highlight of our whole trip. Can't recommend enough!"),
+    (4, "Jonas", "Great value and very welcoming. Would visit again."),
+    (5, "Sofia", "Authentic and memorable — exactly what we hoped to find."),
+    (4, "Daniel", "Lovely spot, friendly service. A little hard to find at first."),
+    (5, "Lena", "Felt like being welcomed into a friend's home. Beautiful."),
+    (4, "Tom", "Delicious and reasonably priced. Busy in the evenings."),
+    (3, "Priya", "Nice experience overall; service was a bit slow but worth it."),
+    (5, "Marco", "Unforgettable. The owner went out of their way to help us."),
+    (4, "Hanna", "Clean, comfortable and great local tips from the staff."),
+    (5, "Yusuf", "Best stop on our route. Genuine hospitality."),
+    (4, "Claire", "Charming place with character. Enjoyed every minute."),
+]
+
+
+def _reviews_for(listing: Listing) -> list[tuple[int, str, str]]:
+    """Deterministically pick 0–3 sample reviews for a business (seeded by name).
+
+    ~1 in 7 businesses get none (realistic); the rest get 1–3.
+    """
+    seed = int(hashlib.md5(listing.name_en.encode("utf-8")).hexdigest(), 16)
+    if seed % 7 == 0:
+        return []
+    count = 1 + (seed % 3)  # 1..3
+    picks = []
+    for i in range(count):
+        picks.append(_SAMPLE_REVIEWS[(seed // (i + 1)) % len(_SAMPLE_REVIEWS)])
+    # de-dup while preserving order
+    seen, unique = set(), []
+    for r in picks:
+        if r[1] not in seen:
+            seen.add(r[1]); unique.append(r)
+    return unique
+
+
+def _stars(n: int) -> str:
+    return "★" * n + "☆" * (5 - n)
+
+
+def _reviews_html(listing: Listing) -> str:
+    reviews = _reviews_for(listing)
+    if not reviews:
+        return '<div class="reviews none">No reviews yet.</div>'
+    avg = round(sum(r[0] for r in reviews) / len(reviews), 1)
+    items = "".join(
+        f'<div class="review"><span class="rstars">{_stars(r[0])}</span>'
+        f'<span class="rname">{html.escape(r[1])}</span>'
+        f'<p>{html.escape(r[2])}</p></div>'
+        for r in reviews
+    )
+    label = "review" if len(reviews) == 1 else "reviews"
+    return (f'<div class="reviews"><div class="rhead">'
+            f'<span class="ravg">{_stars(round(avg))} {avg}</span>'
+            f'<span class="rcount">{len(reviews)} sample {label}</span></div>'
+            f'{items}</div>')
 
 # The Telegram bot tourists message to reach a business. Replace with your real
 # bot's username when you deploy one; the website links deep-link into it with the
@@ -67,6 +130,8 @@ def _card(listing: Listing) -> str:
     if loc:
         links.append(f'<a class="map" href="{loc}" target="_blank" rel="noopener">🗺️ Map</a>')
 
+    reviews = _reviews_html(listing)
+
     # data-* attributes power the client-side search/filter.
     search_blob = html.escape(f"{listing.name_en} {listing.description_en} {cat} {location}".lower())
     return f"""      <article class="card" data-category="{cat}" data-location="{area}" data-search="{search_blob}">
@@ -74,6 +139,7 @@ def _card(listing: Listing) -> str:
         <h2>{name}</h2>
         <div class="meta">{''.join(meta)}</div>
         <p>{desc}</p>
+        {reviews}
         <div class="links">{''.join(links)}</div>
       </article>"""
 
@@ -171,6 +237,8 @@ def render_html(listings: list[Listing]) -> str:
     .controls input {{ flex:1; min-width:200px; max-width:360px; }}
     .controls button {{ border:1px solid #cbd5cf; background:#f3f6f3; border-radius:8px;
                  padding:.55rem .8rem; cursor:pointer; font-size:.9rem; }}
+    .disclaimer {{ background:#fff8e1; border-bottom:1px solid #f0e4b8; color:#7a5c00;
+                   font-size:.82rem; text-align:center; padding:.6rem 1rem; }}
     .count {{ text-align:center; color:#666; font-size:.85rem; padding:.6rem; }}
     main {{ max-width:1050px; margin:0 auto; padding:0 1rem 1.5rem;
             display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:1.25rem; }}
@@ -183,7 +251,16 @@ def render_html(listings: list[Listing]) -> str:
     .card h2 {{ font-size:1.1rem; margin:.75rem .9rem .25rem; }}
     .meta {{ margin:0 .9rem; display:flex; flex-wrap:wrap; gap:.4rem; }}
     .meta span {{ font-size:.75rem; padding:.15rem .5rem; border-radius:999px; background:#eef5ef; color:var(--accent); }}
-    .card p {{ margin:.6rem .9rem; font-size:.9rem; color:#444; flex:1; }}
+    .card p {{ margin:.6rem .9rem; font-size:.9rem; color:#444; }}
+    .reviews {{ margin:0 .9rem .4rem; padding-top:.5rem; border-top:1px dashed #eadf; flex:1; }}
+    .reviews.none {{ font-size:.78rem; color:#aaa; font-style:italic; }}
+    .rhead {{ display:flex; justify-content:space-between; align-items:center; margin-bottom:.35rem; }}
+    .ravg {{ color:#e6a700; font-size:.9rem; }}
+    .rcount {{ font-size:.68rem; color:#999; }}
+    .review {{ margin:.3rem 0; }}
+    .review .rstars {{ color:#e6a700; font-size:.72rem; margin-right:.3rem; }}
+    .review .rname {{ font-size:.72rem; color:#666; font-weight:600; }}
+    .review p {{ margin:.1rem 0 0; font-size:.8rem; color:#555; }}
     .links {{ display:flex; gap:.5rem; padding:.9rem; border-top:1px solid #f0ece2; }}
     .links a {{ flex:1; text-align:center; text-decoration:none; font-size:.85rem; padding:.5rem; border-radius:8px; }}
     .book {{ background:var(--accent); color:#fff; }}
@@ -226,6 +303,12 @@ def render_html(listings: list[Listing]) -> str:
     <p>Authentic businesses, direct from the owners.</p>
   </header>
 
+  <div class="disclaimer">
+    ⚠️ <strong>Demo notice:</strong> the tourist reviews shown on each listing are
+    <strong>sample/illustrative content and are not real</strong>. Business names,
+    phone numbers and locations are real (from OpenStreetMap).
+  </div>
+
   <div class="controls">
     <input id="q" type="search" placeholder="Search businesses, food, places…"
            aria-label="Search" oninput="applyFilters()">
@@ -255,7 +338,8 @@ def render_html(listings: list[Listing]) -> str:
     there are no international SMS or call costs.<br>
     Business names, phone numbers &amp; locations © OpenStreetMap contributors (ODbL).
     Most listings have no photo yet — owners add their own via SMS. The two photographed
-    businesses use openly-licensed images (Wikimedia Commons: Ben Abeba CC BY 2.0; Sheraton Addis, public domain).
+    businesses use openly-licensed images (Wikimedia Commons: Ben Abeba CC BY 2.0; Sheraton Addis, public domain).<br>
+    <strong>Tourist reviews shown are sample/illustrative content and are not real.</strong>
   </footer>
 
   <script>
