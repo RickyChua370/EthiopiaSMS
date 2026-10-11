@@ -78,3 +78,27 @@ def test_pricing_checkout_is_clearly_prototype():
     html = render_html(_listings_from_real())
     # must not imply real payment is wired up
     assert "not yet connected" in html.lower() or "prototype" in html.lower()
+
+
+def test_reviews_disclaimer_present():
+    html = render_html(_listings_from_real())
+    # disclaimer must appear (header banner + footer => at least twice)
+    assert html.count("are not real") >= 2
+    assert "sample" in html.lower()
+
+
+def test_most_businesses_have_reviews_some_none():
+    html = render_html(_listings_from_real())
+    with_reviews = html.count('class="reviews"')
+    none = html.count("No reviews yet")
+    assert with_reviews >= 20          # most have reviews
+    assert none >= 1                   # but some realistically have none
+    assert with_reviews + none == len(REAL_BUSINESSES)
+
+
+def test_reviews_are_deterministic():
+    from app.site.generator import _reviews_for
+    listings = _listings_from_real()
+    first = {l.name_en: _reviews_for(l) for l in listings}
+    second = {l.name_en: _reviews_for(l) for l in listings}
+    assert first == second
