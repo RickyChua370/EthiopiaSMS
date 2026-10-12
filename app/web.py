@@ -262,9 +262,15 @@ fetch('/businesses').then(r=>r.json()).then(list=>{
 const GREETING = {eng:"hello", amh:"\u1230\u120b\u121d", orm:"nagaa"};
 let queue = [];
 
-// Build an onboarding conversation (owner messages) for a real business, in the
-// given input language. We send the category number, then the (real) name,
-// a sample price, the real coordinates, and a short description.
+// A short owner-written description in each input language, so the owner's messages
+// are consistently in the chosen language (the dataset only has English blurbs).
+const DESC_BY_LANG = {
+  eng: "A welcoming local spot — come and visit us!",
+  amh: "ለቱሪስቶች ምቹ የሆነ የአካባቢ ቦታ ነው። እባክዎ ይጎብኙን!",
+  orm: "Iddoo naannoo namoota simatu — kottaa nu daawwadhaa!",
+};
+// Build an onboarding conversation (owner messages) for a real business, ALL in the
+// chosen input language: greeting, category number, name, price, coords, description.
 function scriptFor(biz, lang){
   const price = (biz.category_id === 3) ? "800 birr"
               : (biz.category_id === 1 || biz.category_id === 2) ? "150 birr" : "skip";
@@ -274,7 +280,7 @@ function scriptFor(biz, lang){
           biz.name,
           price,
           coords,
-          biz.description];
+          DESC_BY_LANG[lang] || DESC_BY_LANG.eng];
 }
 
 function add(text, cls){
@@ -312,16 +318,27 @@ async function lithuanianTest(){
       body: JSON.stringify({text: sample, source:'eng', target:'lit'})});
     const data = await res.json();
     if (data.mock) {
-      add("⚠️ Running with placeholder (mock) translation. Start the server with "
-          + "ETHIOPIASMS_TRANSLATOR=mymemory (or ETHIOPIASMS_REAL_NLLB=1) for real "
-          + "Lithuanian.", "out");
+      add("⚠️ Running in placeholder (mock) mode. Restart with "
+          + "ETHIOPIASMS_TRANSLATOR=mock removed (real translation is the default), "
+          + "or set ETHIOPIASMS_REAL_NLLB=1 for the offline model.", "out");
     } else if ((data.engine || "").indexOf("unavailable") !== -1) {
-      add("⚠️ The translation service couldn't be reached just now, so the text "
-          + "wasn't translated. Check the server's internet connection and try "
-          + "again.", "out");
+      add("⚠️ All three free translation services (MyMemory, LibreTranslate, Google) "
+          + "could not be reached from this machine — usually a network/firewall/VPN "
+          + "block or no internet. Click again to retry, or run the offline model "
+          + "with ETHIOPIASMS_REAL_NLLB=1.", "out");
     } else {
       add("Lietuvių (Lithuanian): " + data.text, "out");
       add("Engine: " + data.engine, "out");
+      // Round-trip back to English so judges can see the meaning is preserved.
+      try {
+        const back = await fetch('/translate', {method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({text: data.text, source:'lit', target:'eng'})});
+        const bd = await back.json();
+        if (bd && bd.text && (bd.engine||"").indexOf("unavailable") === -1) {
+          add("↩ Back to English (check): " + bd.text, "out");
+        }
+      } catch(e){}
     }
   } catch(e){
     add("Translation unavailable in this session.", "out");
@@ -463,6 +480,10 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         path = urlparse(self.path).path
         if path == "/":
+            # Fresh page load => clear previously-registered demo listings so the
+            # website panel starts empty (listings don't stick around forever).
+            with _lock:
+                _store.clear()
             self._send(200, PAGE.encode("utf-8"), "text/html; charset=utf-8")
         elif path == "/site":
             with _lock:

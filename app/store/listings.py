@@ -65,6 +65,11 @@ class ListingStore:
         self._save()
         return listing
 
+    def clear(self) -> None:
+        """Remove all listings (used by the simulator to reset on page load)."""
+        self._items = []
+        self._save()
+
     def all(self) -> list[Listing]:
         return list(self._items)
 
