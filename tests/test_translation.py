@@ -14,9 +14,16 @@ from app.ai.translation import (
 )
 
 
-def test_factory_defaults_to_mock(monkeypatch):
+def test_factory_defaults_to_real_translation(monkeypatch):
     monkeypatch.delenv("ETHIOPIASMS_REAL_NLLB", raising=False)
     monkeypatch.delenv("ETHIOPIASMS_TRANSLATOR", raising=False)
+    # Default is now real (free, API-based) translation so the demo works out of the box.
+    assert isinstance(get_translator(), MyMemoryTranslator)
+
+
+def test_factory_explicit_mock(monkeypatch):
+    monkeypatch.delenv("ETHIOPIASMS_REAL_NLLB", raising=False)
+    monkeypatch.setenv("ETHIOPIASMS_TRANSLATOR", "mock")
     assert isinstance(get_translator(), MockTranslator)
 
 

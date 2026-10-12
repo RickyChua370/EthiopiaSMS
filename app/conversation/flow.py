@@ -74,8 +74,15 @@ class ConversationEngine:
             return [t("ask_name", s.lang)]
 
         if s.step == Step.NAME:
-            # re-detect language from richer free text if first msg was just a number
-            s.lang = language_id.detect(text) or s.lang
+            # Only *upgrade* the language if we haven't yet detected a non-English
+            # one. A business name is often in Latin/English (e.g. "Ras Dashen Shop")
+            # even for an Amharic/Oromo speaker, so it must NOT override an Amharic/
+            # Oromo language already detected from the greeting — otherwise the rest
+            # of the prompts would wrongly switch to English.
+            if s.lang == "eng":
+                detected = language_id.detect(text)
+                if detected != "eng":
+                    s.lang = detected
             s.draft["name_src"] = text
             s.step = Step.PRICE
             return [t("ask_price", s.lang)]
