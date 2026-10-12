@@ -31,13 +31,32 @@ _OROMO_WORDS = {
 # Characteristic Oromo digraphs that are rare in English words.
 _OROMO_DIGRAPHS = re.compile(r"(dh|ny|aa|ii|oo|uu|ee)", re.IGNORECASE)
 
+# Lithuanian-specific letters (with diacritics) + common function words. These
+# diacritics do not occur in English/Oromo/Amharic-Latin, so they are a strong,
+# unambiguous signal.
+_LITHUANIAN_CHARS = re.compile(r"[ąčęėįšųūž]", re.IGNORECASE)
+_LITHUANIAN_WORDS = {
+    "sveiki", "labas", "ačiū", "aciu", "taip", "ne", "turime", "kambarį", "kambari",
+    "naktį", "nakti", "naktims", "už", "uz", "kiek", "prašau", "prasau", "iki",
+    "pasimatymo", "rytoj", "galite", "registruotis", "mano", "verslas", "kaina",
+}
+
 
 def detect(text: str) -> str:
-    """Return 'amh', 'orm', or 'eng'."""
+    """Return 'amh', 'orm', 'lit', or 'eng'."""
     if _ETHIOPIC.search(text):
         return "amh"
 
-    tokens = re.findall(r"[a-zA-Z]+", text.lower())
+    # Lithuanian first (Latin script like Oromo/English): its diacritics or common
+    # words are a strong, distinct signal.
+    lowered = text.lower()
+    if _LITHUANIAN_CHARS.search(text):
+        return "lit"
+    lit_tokens = re.findall(r"[\w]+", lowered, re.UNICODE)
+    if any(tok in _LITHUANIAN_WORDS for tok in lit_tokens):
+        return "lit"
+
+    tokens = re.findall(r"[a-zA-Z]+", lowered)
     if not tokens:
         return "eng"
 

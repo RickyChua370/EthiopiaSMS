@@ -162,7 +162,7 @@ PAGE = """<!DOCTYPE html>
             <button onclick="fill('eng')">🇬🇧 Onboard a random business (English)</button>
             <button onclick="fill('amh')">🇪🇹 …in Amharic</button>
             <button onclick="fill('orm')">…in Oromo</button>
-            <button onclick="lithuanianTest()">🇱🇹 Lithuanian (judge test)</button>
+            <button onclick="fill('lit')">🇱🇹 …in Lithuanian (judge accuracy test)</button>
           </div>
         </div>
         <div class="compose">
@@ -259,7 +259,7 @@ fetch('/businesses').then(r=>r.json()).then(list=>{
 });
 
 // Greeting word per onboarding language (triggers language detection).
-const GREETING = {eng:"hello", amh:"\u1230\u120b\u121d", orm:"nagaa"};
+const GREETING = {eng:"hello", amh:"\u1230\u120b\u121d", orm:"nagaa", lit:"Sveiki"};
 let queue = [];
 
 // A short owner-written description in each input language, so the owner's messages
@@ -268,6 +268,7 @@ const DESC_BY_LANG = {
   eng: "A welcoming local spot — come and visit us!",
   amh: "ለቱሪስቶች ምቹ የሆነ የአካባቢ ቦታ ነው። እባክዎ ይጎብኙን!",
   orm: "Iddoo naannoo namoota simatu — kottaa nu daawwadhaa!",
+  lit: "Jauki vietinė vieta — užsukite ir aplankykite mus!",
 };
 // Build an onboarding conversation (owner messages) for a real business, ALL in the
 // chosen input language: greeting, category number, name, price, coords, description.
@@ -305,44 +306,6 @@ function fill(lang){
   add("(demo: onboarding \u201c" + biz.name + "\u201d)", "out");
   queue = scriptFor(biz, lang);
   document.getElementById('inp').value = queue.shift(); send();
-}
-// Judge aid: translate an English listing sentence to Lithuanian so Lithuanian
-// judges can verify translation quality in their own language.
-async function lithuanianTest(){
-  const sample = "Historic coffee house in the heart of Addis Ababa, roasting since 1953.";
-  add("🇱🇹 Judge test — translate English → Lithuanian", "in");
-  add("English: " + sample, "out");
-  try {
-    const res = await fetch('/translate', {method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({text: sample, source:'eng', target:'lit'})});
-    const data = await res.json();
-    if (data.mock) {
-      add("⚠️ Running in placeholder (mock) mode. Restart with "
-          + "ETHIOPIASMS_TRANSLATOR=mock removed (real translation is the default), "
-          + "or set ETHIOPIASMS_REAL_NLLB=1 for the offline model.", "out");
-    } else if ((data.engine || "").indexOf("unavailable") !== -1) {
-      add("⚠️ All three free translation services (MyMemory, LibreTranslate, Google) "
-          + "could not be reached from this machine — usually a network/firewall/VPN "
-          + "block or no internet. Click again to retry, or run the offline model "
-          + "with ETHIOPIASMS_REAL_NLLB=1.", "out");
-    } else {
-      add("Lietuvių (Lithuanian): " + data.text, "out");
-      add("Engine: " + data.engine, "out");
-      // Round-trip back to English so judges can see the meaning is preserved.
-      try {
-        const back = await fetch('/translate', {method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({text: data.text, source:'lit', target:'eng'})});
-        const bd = await back.json();
-        if (bd && bd.text && (bd.engine||"").indexOf("unavailable") === -1) {
-          add("↩ Back to English (check): " + bd.text, "out");
-        }
-      } catch(e){}
-    }
-  } catch(e){
-    add("Translation unavailable in this session.", "out");
-  }
 }
 function reset(){
   phone=newPhone(); document.getElementById('who').textContent="("+phone+")";

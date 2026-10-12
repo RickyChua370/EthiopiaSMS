@@ -18,21 +18,26 @@ PROMPTS: dict[str, dict[str, str]] = {
                "በፈለጉት ጊዜ በቋንቋዎ ይመልሱ።",
         "orm": "Baga nagaan dhuftan! Daldala keessan turistootaaf online haa gochuu. "
                "Bilisa. Yeroo barbaaddanitti afaan keessaniin deebisaa.",
+        "lit": "Sveiki! Pasirūpinkime, kad jūsų verslas būtų prieinamas turistams. "
+               "Tai nemokama. Atsakykite savo kalba bet kuriuo metu.",
     },
     "ask_category": {
         "eng": "What type of business is it? Reply with the number:",
         "amh": "ንግድዎ ምን ዓይነት ነው? በቁጥር ይመልሱ፦",
         "orm": "Daldalli keessan gosa kami? Lakkoofsaan deebisaa:",
+        "lit": "Kokio tipo verslas tai yra? Atsakykite nurodydami numerį:",
     },
     "ask_name": {
         "eng": "What is the name of your business?",
         "amh": "የንግድዎ ስም ማን ይባላል?",
         "orm": "Maqaan daldala keessanii eenyu?",
+        "lit": "Koks jūsų įmonės pavadinimas?",
     },
     "ask_price": {
         "eng": "What is your typical price? (e.g. 150 ETB). Reply 'skip' if none.",
         "amh": "የተለመደ ዋጋዎ ስንት ነው? (ለምሳሌ 150 ብር)። ከሌለ 'skip' ይበሉ።",
         "orm": "Gatiin keessan meeqa? (fakkeenyaaf 150 ETB). Yoo hin jirre 'skip' jedhaa.",
+        "lit": "Kokia jūsų tipinė kaina? (pvz., 150 ETB). Jei nėra, atsakykite „skip“.",
     },
     # --- Location via the COMPASS app (not Google Maps) ---
     "ask_location_intro": {
@@ -72,6 +77,7 @@ PROMPTS: dict[str, dict[str, str]] = {
         "eng": "In one or two sentences, describe your business for tourists.",
         "amh": "በአንድ ወይም ሁለት ዓረፍተ ነገር ንግድዎን ለቱሪስቶች ይግለጹ።",
         "orm": "Himoota tokko ykn lama keessatti daldala keessan turistootaaf ibsaa.",
+        "lit": "Vienu ar dviem sakiniais apibūdinkite savo verslą turistams.",
     },
     # --- Deferred, connection-aware image upload ---
     "images_link": {
