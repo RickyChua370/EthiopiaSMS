@@ -102,3 +102,11 @@ def test_reviews_are_deterministic():
     first = {l.name_en: _reviews_for(l) for l in listings}
     second = {l.name_en: _reviews_for(l) for l in listings}
     assert first == second
+
+
+def test_with_reviews_false_hides_reviews_and_disclaimer():
+    """Freshly-registered businesses (e.g. in the SMS simulator) show no reviews."""
+    html = render_html(_listings_from_real(), with_reviews=False)
+    assert 'class="reviews"' not in html
+    assert "No reviews yet" not in html
+    assert "are not real" not in html
