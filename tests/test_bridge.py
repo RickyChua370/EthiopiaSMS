@@ -4,13 +4,15 @@ from __future__ import annotations
 
 from app.adapters.mock import MockAdapter
 from app.adapters.telegram_mock import MockTelegramAdapter
+from app.ai.translation import MockTranslator
 from app.bridge.hub import BridgeHub
 
 
 def _hub():
     sms = MockAdapter()
     tg = MockTelegramAdapter()
-    return BridgeHub(sms, tg), sms, tg
+    # Use the mock translator so tests are deterministic and offline (no network).
+    return BridgeHub(sms, tg, translator=MockTranslator()), sms, tg
 
 
 def test_start_inquiry_greets_tourist():

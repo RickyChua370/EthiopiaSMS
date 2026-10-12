@@ -141,7 +141,12 @@ class MyMemoryTranslator(Translator):
         if out is not None:
             return TranslationResult(out, conf, source, target, "libretranslate")
 
-        # 3) Both unavailable — honest fallback (never hard-fail the demo).
+        # 3) Final fallback: Google's free (unofficial) translate endpoint, no key.
+        out = self._google(text, source, target)
+        if out is not None:
+            return TranslationResult(out, conf, source, target, "google")
+
+        # 4) All providers unavailable — honest fallback (never hard-fail the demo).
         return TranslationResult(text, 0.3, source, target, "unavailable")
 
     # -- providers -----------------------------------------------------------
@@ -206,15 +211,45 @@ class MyMemoryTranslator(Translator):
                   file=sys.stderr)
         return None
 
+    def _google(self, text: str, source: str, target: str):
+        """Google's free, unofficial translate endpoint (no key). Last-resort
+        fallback for maximum reliability in the demo."""
+        import json as _json
+        import sys
+        import urllib.parse
+        import urllib.request
+
+        try:
+            params = urllib.parse.urlencode({
+                "client": "gtx", "sl": ISO_CODE[source], "tl": ISO_CODE[target],
+                "dt": "t", "q": text,
+            })
+            url = f"https://translate.googleapis.com/translate_a/single?{params}"
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                data = _json.loads(resp.read().decode("utf-8"))
+            # Response is a nested array; the translated segments are in data[0].
+            out = "".join(seg[0] for seg in data[0] if seg and seg[0])
+            if out.strip():
+                return out
+        except Exception as exc:
+            print(f"  [translate] Google fallback failed ({source}->{target}): {exc}",
+                  file=sys.stderr)
+        return None
+
 
 def get_translator() -> Translator:
     """Factory, selected by environment:
         ETHIOPIASMS_REAL_NLLB=1          -> local NLLB-200 model (best quality, heavy)
-        ETHIOPIASMS_TRANSLATOR=mymemory  -> free MyMemory web API (light, host-friendly)
-        (default)                        -> mock (instant, offline, placeholder output)
+        ETHIOPIASMS_TRANSLATOR=mock      -> placeholder output (offline, no network)
+        ETHIOPIASMS_TRANSLATOR=mymemory  -> free web APIs (explicit; same as default)
+        (default)                        -> free web translation (MyMemory → Libre →
+                                            Google fallbacks). Real translation with
+                                            no setup, so the demo "just works".
     """
     if os.environ.get("ETHIOPIASMS_REAL_NLLB") == "1":
         return NllbTranslator()
-    if os.environ.get("ETHIOPIASMS_TRANSLATOR", "").lower() == "mymemory":
-        return MyMemoryTranslator()
-    return MockTranslator()
+    if os.environ.get("ETHIOPIASMS_TRANSLATOR", "").lower() == "mock":
+        return MockTranslator()
+    # Default to real (free, API-based) translation with multi-provider fallback.
+    return MyMemoryTranslator()
