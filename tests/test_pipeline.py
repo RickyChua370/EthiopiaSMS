@@ -37,6 +37,16 @@ def test_language_id_english_not_oromo():
     assert language_id.detect("Historic coffee house in the heart of Addis") == "eng"
 
 
+def test_language_id_lithuanian():
+    assert language_id.detect("Sveiki! Turime kambarį dviem naktims.") == "lit"
+    assert language_id.detect("Ačiū, iki pasimatymo rytoj!") == "lit"
+
+
+def test_language_id_lithuanian_not_confused_with_english():
+    # plain English must still be English, not Lithuanian
+    assert language_id.detect("hello, do you have a room") == "eng"
+
+
 # ------------------------------------------------------------------ extraction
 
 def test_parse_coordinates_valid_ethiopia():
