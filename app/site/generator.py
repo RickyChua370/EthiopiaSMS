@@ -100,7 +100,7 @@ def _location_of(listing: Listing) -> str:
     return (listing.area or "Ethiopia").strip()
 
 
-def _card(listing: Listing) -> str:
+def _card(listing: Listing, with_reviews: bool = True) -> str:
     name = html.escape(listing.name_en or "Unnamed business")
     cat = html.escape(listing.category_en)
     desc = html.escape(listing.description_en or "")
@@ -130,7 +130,9 @@ def _card(listing: Listing) -> str:
     if loc:
         links.append(f'<a class="map" href="{loc}" target="_blank" rel="noopener">🗺️ Map</a>')
 
-    reviews = _reviews_html(listing)
+    # Reviews are shown on the public site only. In the live simulator, a business
+    # has just been registered via SMS, so it has no reviews yet.
+    reviews = _reviews_html(listing) if with_reviews else ""
 
     # data-* attributes power the client-side search/filter.
     search_blob = html.escape(f"{listing.name_en} {listing.description_en} {cat} {location}".lower())
@@ -206,8 +208,9 @@ def _pricing_section() -> str:
   </section>"""
 
 
-def render_html(listings: list[Listing]) -> str:
-    cards = "\n".join(_card(l) for l in listings) or '<p class="empty">No listings yet.</p>'
+def render_html(listings: list[Listing], with_reviews: bool = True) -> str:
+    cards = "\n".join(_card(l, with_reviews=with_reviews) for l in listings) \
+        or '<p class="empty">No listings yet.</p>'
     categories = sorted({l.category_en for l in listings})
     locations = sorted({_location_of(l) for l in listings})
     cat_options = "".join(f'<option value="{html.escape(c)}">{html.escape(c)}</option>'
@@ -215,6 +218,17 @@ def render_html(listings: list[Listing]) -> str:
     loc_options = "".join(f'<option value="{html.escape(l)}">{html.escape(l)}</option>'
                           for l in locations)
     total = len(listings)
+
+    # The reviews disclaimer is only relevant when sample reviews are shown.
+    disclaimer = (
+        '<div class="disclaimer">\n'
+        '    ⚠️ <strong>Demo notice:</strong> the tourist reviews shown on each listing are\n'
+        '    <strong>sample/illustrative content and are not real</strong>. Business names,\n'
+        '    phone numbers and locations are real (from OpenStreetMap).\n'
+        '  </div>'
+    ) if with_reviews else ""
+    review_footnote = ('<br>\n    <strong>Tourist reviews shown are sample/illustrative '
+                       'content and are not real.</strong>') if with_reviews else ""
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -303,11 +317,7 @@ def render_html(listings: list[Listing]) -> str:
     <p>Authentic businesses, direct from the owners.</p>
   </header>
 
-  <div class="disclaimer">
-    ⚠️ <strong>Demo notice:</strong> the tourist reviews shown on each listing are
-    <strong>sample/illustrative content and are not real</strong>. Business names,
-    phone numbers and locations are real (from OpenStreetMap).
-  </div>
+  {disclaimer}
 
   <div class="controls">
     <input id="q" type="search" placeholder="Search businesses, food, places…"
@@ -338,8 +348,7 @@ def render_html(listings: list[Listing]) -> str:
     there are no international SMS or call costs.<br>
     Business names, phone numbers &amp; locations © OpenStreetMap contributors (ODbL).
     Most listings have no photo yet — owners add their own via SMS. The two photographed
-    businesses use openly-licensed images (Wikimedia Commons: Ben Abeba CC BY 2.0; Sheraton Addis, public domain).<br>
-    <strong>Tourist reviews shown are sample/illustrative content and are not real.</strong>
+    businesses use openly-licensed images (Wikimedia Commons: Ben Abeba CC BY 2.0; Sheraton Addis, public domain).{review_footnote}
   </footer>
 
   <script>

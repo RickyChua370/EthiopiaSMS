@@ -466,7 +466,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, PAGE.encode("utf-8"), "text/html; charset=utf-8")
         elif path == "/site":
             with _lock:
-                html = render_html(_store.published())
+                # Simulator businesses were just registered via SMS, so no reviews yet.
+                html = render_html(_store.published(), with_reviews=False)
             self._send(200, html.encode("utf-8"), "text/html; charset=utf-8")
         elif path == "/booking/poll":
             # Return any new messages for the tourist (Telegram) and owner (SMS) sides.
