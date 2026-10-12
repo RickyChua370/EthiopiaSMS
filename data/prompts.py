@@ -43,8 +43,8 @@ PROMPTS: dict[str, dict[str, str]] = {
     "ask_location_intro": {
         "eng": "Now your location. Most phones have a 'Compass' app that shows your "
                "coordinates. Let's use it.",
-        "amh": "አሁን አካባቢዎ። አብዛኞቹ ስልኮች መጋጠሚያዎን የሚያሳይ 'ኮምፓስ' መተግበሪያ አላቸው። "
-               "እሱን እንጠቀም።",
+        "amh": "አሁን የንግድዎን ቦታ እንመዝግብ። አብዛኞቹ ስልኮች የቦታ ቁጥሮችዎን (ኬክሮስና ኬንትሮስ) "
+               "የሚያሳይ 'ኮምፓስ' መተግበሪያ አላቸው። እሱን እንጠቀም።",
         "orm": "Amma iddoo keessan. Bilbilli hedduun aappilikeeshinii 'Compass' kan "
                "iddoo agarsiisu qaba. Isa haa fayyadamnu.",
     },
